@@ -1,12 +1,9 @@
 using UnityEngine;
 using UnityEngine.UI;
+using Ale.Toolkit.Runtime;
 
 #if HAS_TMPRO
 using TMPro;
-#endif
-
-#if DOTWEEN
-using DG.Tweening;
 #endif
 
 namespace PixelCrushers.DialogueSystem.VNStoryFramework
@@ -17,7 +14,6 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
     /// </summary>
     public class VNResponseButton : StandardUIResponseButton
     {
-#if DOTWEEN
         [Tooltip("图片列表：可包含多个图片组件，根据 是否已读的状态 设置图片的颜色。")] [SerializeField]
         private Image[] stateImageArray;
         [Tooltip("文本列表：可包含多个文本组件，根据 是否已读的状态 设置文本的颜色。")]
@@ -72,9 +68,14 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
                     // 设置 文本颜色
                     if (stateTxtArray != null)
                     {
+                        var txtColor = isRead ? isReadTxtColor : isUnReadTxtColor;
                         foreach (var txt in stateTxtArray)
                         {
-                            if (txt != null) txt.DOColor(isRead ? isReadTxtColor : isUnReadTxtColor, 0.2f);  
+                            if (txt == null) continue;
+                            // 选项按钮会被 DialogueSystem 复用，同一实例可能在上一次 0.2s 变色未结束时又被赋新 response。
+                            // ToolkitTween 不做覆盖管理，故先打断该目标上的在途补间，避免两个补间同帧争写导致闪色。
+                            ToolkitTween.Kill(txt);
+                            ToolkitTween.TintGraphic(txt, txtColor, 0.2f, unscaled: false);
                         }
                     }
                     // 设置 图片颜色
@@ -88,6 +89,5 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
                 }
             }
         }
-#endif
     }
 }
