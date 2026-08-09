@@ -680,10 +680,8 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         [SerializeField] public float backgroundFadeDuration = 0.3f;
         
         private bool _isBackgroundFadeIn; // 当前背景是否是淡入状态
-#if DOTWEEN
-        // Tween 清除所有背景图像的
-        private Tween _tweenClearAllBackground;
-#endif
+        // 清除所有背景图像的 延时句柄。值类型，无效句柄为 default。
+        private ToolkitTweenHandle _tweenClearAllBackground;
         
         /// <summary>
         /// 初始化 背景
@@ -769,20 +767,15 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
             // 淡出背景图像
             if (srBackgroundCurrent)
             {
-#if DOTWEEN
-                srBackgroundCurrent.DOKill();
-                srBackgroundCurrent.DOFade(0f, delay);
-#endif
+                ToolkitTween.Kill(srBackgroundCurrent);
+                ToolkitTween.FadeSpriteRenderer(srBackgroundCurrent, 0f, delay, unscaled: false);
             }
             if (srBackgroundLast)
             {
-#if DOTWEEN
-                srBackgroundLast.DOKill();
-                srBackgroundLast.DOFade(0f, delay);
-#endif
+                ToolkitTween.Kill(srBackgroundLast);
+                ToolkitTween.FadeSpriteRenderer(srBackgroundLast, 0f, delay, unscaled: false);
             }
-#if DOTWEEN
-            _tweenClearAllBackground = DOVirtual.DelayedCall(delay, () =>
+            _tweenClearAllBackground = ToolkitTween.DelayedCall(delay, () =>
             {
                 // 卸载背景图像资源
                 UnloadAsset(_backgroundAssetNameLast);
@@ -801,9 +794,8 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
                     srBackgroundLast.gameObject.SetActive(false);
                 }
                 
-                _tweenClearAllBackground = null;
-            });
-#endif
+                _tweenClearAllBackground = default;
+            }, unscaled: false);
         }
         
         #region 设置背景
@@ -818,11 +810,11 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         /// <param name="subtitle"></param>
         private void OnOnConversationLineBackgroundChange(Subtitle subtitle)
         {
-            // 上次清除背景图像的Tween 未结束，强制完成
-            if (_tweenClearAllBackground != null)
+            // 上次清除背景图像的延时未结束，强制完成（同步触发其回调）
+            if (_tweenClearAllBackground.IsActive)
             {
                 _tweenClearAllBackground.Complete();
-                _tweenClearAllBackground = null;
+                _tweenClearAllBackground = default;
             }
             
             // 尝试从 对话行字段 获取 背景图像名称
@@ -1004,10 +996,8 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         #region 角色 加载与卸载
         // 已加载的 角色预制体 表。key=字段标题，value=加载数据
         private readonly Dictionary<string, FActorPrefabLoadData> _mapActorAnimator = new Dictionary<string, FActorPrefabLoadData>();
-#if DOTWEEN
-        // 延迟激活的Actor的Tween列表
-        private List<Tween> _actorInitDelayTweens = new List<Tween>();
-#endif
+        // 延迟激活的Actor的 延时句柄列表
+        private readonly List<ToolkitTweenHandle> _actorInitDelayTweens = new List<ToolkitTweenHandle>();
         
         /// <summary>
         /// 对话行 角色变化
@@ -1058,14 +1048,16 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         }
         
         /// <summary>
-        /// 停止所有 延迟激活的Actor的Tween。
+        /// 停止所有 延迟激活的Actor的延时。
         /// </summary>
         private void StopAllActorDelayTweens()
         {
-            // 停止所有延迟激活的Actor的Tween
-            foreach (var tween in _actorInitDelayTweens)
+            // 停止所有延迟激活的Actor的延时。
+            // 倒序索引遍历而非 foreach：Kill 虽不触发回调，但与 CompleteAllBGMDelayTweens 保持同一写法，
+            // 避免日后有人改成 Complete() 时踩到「遍历中回调改集合」的 InvalidOperationException。
+            for (int i = _actorInitDelayTweens.Count - 1; i >= 0; i--)
             {
-                tween.Kill();
+                _actorInitDelayTweens[i].Kill();
             }
             _actorInitDelayTweens.Clear();
         }
@@ -1076,9 +1068,9 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         /// <returns></returns>
         private void ClearAllActors()
         {
-            // 停止所有延迟激活的Actor的Tween
+            // 停止所有延迟激活的Actor的延时
             StopAllActorDelayTweens();
-            
+
             // 卸载 所有角色预制体
             var actorFieldTitleList = new List<string>(_mapActorAnimator.Keys);
             var actorPrefabLoadDataList = new List<FActorPrefabLoadData>(_mapActorAnimator.Values);
@@ -1182,19 +1174,19 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
                 
                 if (delay > 0f)
                 {
-#if DOTWEEN
                     // 延迟设置角色预制体
-                    // 使用单元素持有器引用Tween，避免闭包捕获外部被修改的变量。
-                    var tweenHolder = new Tween[1];
-                    tweenHolder[0] = DOVirtual.DelayedCall(delay, () =>
+                    // 使用单元素持有器引用句柄，避免闭包捕获外部被修改的变量。
+                    var tweenHolder = new ToolkitTweenHandle[1];
+                    tweenHolder[0] = ToolkitTween.DelayedCall(delay, () =>
                     {
                         // 设置角色预制体
                         InitActorPrefab(actorAnimsLoadData, actorPosParam, actorRotateParam, actorScaleParam, actorAnimParam);
-                        // 从延迟Tween列表中移除
+                        // 从延迟句柄列表中移除
                         _actorInitDelayTweens.Remove(tweenHolder[0]);
-                    });
-                    _actorInitDelayTweens.Add(tweenHolder[0]);
-#endif
+                    }, unscaled: false);
+                    // 仅登记真正在途的句柄：delay ≤ 0 会同步跑完回调并返回空句柄，
+                    // 此时上面的 Remove 已先于 Add 执行，不加守卫会留下永不移除的僵尸条目。
+                    if (tweenHolder[0].IsActive) _actorInitDelayTweens.Add(tweenHolder[0]);
                 }
                 else
                 {
@@ -1462,12 +1454,10 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         private readonly Dictionary<string, string> _dicBgmFieldTitleToAudioKey = new Dictionary<string, string>();
         // 记录 音频-字段标题 到 音频Key 的映射表。进入到新的对话行时，停止所有上个对话行播放的音频。
         private readonly Dictionary<string, string> _dicSfxFieldTitleToAudioKey = new Dictionary<string, string>();
-#if DOTWEEN
-        // 记录 背景音乐 延迟播放的Tween。
-        private readonly List<Tween> _bgmDelayTweens = new List<Tween>();
-        // 记录 音效音频 延迟播放的Tween。
-        private readonly List<Tween> _sfxDelayTweens = new List<Tween>();
-#endif
+        // 记录 背景音乐 延迟播放的 延时句柄。
+        private readonly List<ToolkitTweenHandle> _bgmDelayTweens = new List<ToolkitTweenHandle>();
+        // 记录 音效音频 延迟播放的 延时句柄。
+        private readonly List<ToolkitTweenHandle> _sfxDelayTweens = new List<ToolkitTweenHandle>();
         
         /// <summary>
         /// 对话行 音频变化
@@ -1542,20 +1532,18 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
                 // 延迟播放
                 if (delay > 0f)
                 {
-#if DOTWEEN
-                    var tweenHolder = new Tween[1];
-                    tweenHolder[0] = DOVirtual.DelayedCall(delay, () =>
+                    var tweenHolder = new ToolkitTweenHandle[1];
+                    tweenHolder[0] = ToolkitTween.DelayedCall(delay, () =>
                     {
                         // 延迟时间到，播放背景音乐。循环播放
                         AudioManager.Instance.PlayWithChannel(audioFieldTitle, audioKey, volume, pitch);
                         // 记录 背景音乐Key
                         _dicBgmFieldTitleToAudioKey[audioFieldTitle] = audioKey;
-                        // 从 延迟播放的 Tween 列表中 移除
+                        // 从 延迟播放的 句柄列表中 移除
                         _bgmDelayTweens.Remove(tweenHolder[0]);
-                    });
-                    // 记录 延迟播放的 Tween
-                    _bgmDelayTweens.Add(tweenHolder[0]);
-#endif
+                    }, unscaled: false);
+                    // 记录 延迟播放的 句柄。仅登记真正在途的（见 LoadActorPrefab 处的同款守卫说明）
+                    if (tweenHolder[0].IsActive) _bgmDelayTweens.Add(tweenHolder[0]);
                 }
                 else
                 {
@@ -1577,33 +1565,32 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         }
         
         /// <summary>
-        /// 立即完成 所有背景音乐 延迟播放的 Tween。
+        /// 立即完成 所有背景音乐 延迟播放的 延时。
         /// </summary>
         private void CompleteAllBGMDelayTweens()
         {
-#if DOTWEEN
-            // 立即完成 背景音乐 延迟播放的 Tween
-            foreach (Tween tween in _bgmDelayTweens)
+            // 立即完成 背景音乐 延迟播放的 延时。
+            // 必须倒序索引遍历，不能用 foreach：Complete() 是同步的，会就地触发回调，
+            // 而回调里有 _bgmDelayTweens.Remove(...)，foreach 的枚举器会因版本号失配抛
+            // InvalidOperationException（即使只有一个元素也会抛，返回 false 的那次 MoveNext 同样校验版本）。
+            for (int i = _bgmDelayTweens.Count - 1; i >= 0; i--)
             {
-                tween.Complete();
+                _bgmDelayTweens[i].Complete();
             }
             _bgmDelayTweens.Clear();
-#endif
         }
-        
+
         /// <summary>
         /// 清除 所有背景音乐。
         /// </summary>
         private void ClearAllBGM()
         {
-#if DOTWEEN
-            // 立即完成 背景音乐 延迟播放的 Tween
-            foreach (Tween tween in _bgmDelayTweens)
+            // 立即打断 背景音乐 延迟播放的 延时（不触发回调，故延迟的BGM不会再播）
+            for (int i = _bgmDelayTweens.Count - 1; i >= 0; i--)
             {
-                tween.Kill();
+                _bgmDelayTweens[i].Kill();
             }
             _bgmDelayTweens.Clear();
-#endif
             // 停止所有 记录的 背景音乐Key
             foreach (var kvp in _dicBgmFieldTitleToAudioKey)
             {
@@ -1632,20 +1619,18 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
                 // 延迟播放
                 if (delay > 0f)
                 {
-#if DOTWEEN
-                    var tweenHolder = new Tween[1];
-                    tweenHolder[0] = DOVirtual.DelayedCall(delay, () =>
+                    var tweenHolder = new ToolkitTweenHandle[1];
+                    tweenHolder[0] = ToolkitTween.DelayedCall(delay, () =>
                     {
                         // 延迟 播放音频
                         AudioManager.Instance.Play(audioKey, volume, pitch);
                         // 记录 音频Key
                         _dicSfxFieldTitleToAudioKey[audioFieldTitle] = audioKey;
-                        // 从 延迟播放的 Tween 列表中 移除
+                        // 从 延迟播放的 句柄列表中 移除
                         _sfxDelayTweens.Remove(tweenHolder[0]);
-                    });
-                    // 记录 延迟播放的 Tween
-                    _sfxDelayTweens.Add(tweenHolder[0]);
-#endif
+                    }, unscaled: false);
+                    // 记录 延迟播放的 句柄。仅登记真正在途的（见 LoadActorPrefab 处的同款守卫说明）
+                    if (tweenHolder[0].IsActive) _sfxDelayTweens.Add(tweenHolder[0]);
                 }
                 else
                 {
@@ -1664,14 +1649,12 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         private void ClearAllSfx()
         {
             // 停止所有 延迟播放的 音频
-            // 跳过对话后，音频也不再播放。
-#if DOTWEEN
-            foreach (var tween in _sfxDelayTweens)
+            // 跳过对话后，音频也不再播放。Kill 不触发回调，故延迟的音频不会再播。
+            for (int i = _sfxDelayTweens.Count - 1; i >= 0; i--)
             {
-                tween.Kill();
+                _sfxDelayTweens[i].Kill();
             }
             _sfxDelayTweens.Clear();
-#endif
             // 停止所有 记录的 音频Key
             foreach (var kvp in _dicSfxFieldTitleToAudioKey)
             {
