@@ -353,17 +353,17 @@ MonoBehaviour:
   conversationResponseButtonVariableIsReadFieldTitle: ConversationResponseButtonVariableIsRead
   dialogueTypewriterSpeedFieldTitle: DialogueTypewriterSpeed
   dialogueTypewriterPerSecond: 10
-  dialogueHeadAddressableFolder: Assets/Plugins/Pixel Crushers/VNStoryManager/Assets/ActorsHead/
+  dialogueHeadAddressableFolder: Assets/VNStoryManager/Assets/ActorsHead/
   dialogueHeadExtension: .png
   dialogueHeadFieldTitle: DialogueHead
   srBackgroundCurrent: {fileID: 3949102267733036111}
   srBackgroundLast: {fileID: 701117378272908449}
-  backgroundAddressableFolder: Assets/Plugins/Pixel Crushers/VNStoryManager/Assets/Backgrounds/
+  backgroundAddressableFolder: Assets/VNStoryManager/Assets/Backgrounds/
   backgroundAddressableExtension: .jpg
   backgroundFieldTitle: Background
   backgroundFadeDurationFieldTitle: BackgroundFadeDuration
   backgroundFadeDuration: 0.3
-  actorAddressableFolder: Assets/Plugins/Pixel Crushers/VNStoryManager/Assets/Actors/
+  actorAddressableFolder: Assets/VNStoryManager/Assets/Actors/
   actorAddressableExtension: .prefab
   actorFieldTitle:
   - Actor1Prefab
@@ -385,7 +385,7 @@ MonoBehaviour:
   - Actor1Anim
   - Actor2Anim
   - Actor3Anim
-  effectAddressableFolder: Assets/Plugins/Pixel Crushers/VNStoryManager/Assets/Effects/
+  effectAddressableFolder: Assets/VNStoryManager/Assets/Effects/
   effectAddressableExtension: .prefab
   effectFieldTitle:
   - Effect1Prefab

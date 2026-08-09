@@ -557,7 +557,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         [Header("对话-头像切换")]
 #if USE_ADDRESSABLES
         [Tooltip("对话-头像切换 文件夹路径")]
-        [SerializeField] private string dialogueHeadAddressableFolder = "Assets/Plugins/Pixel Crushers/VNStoryManager/Assets/ActorsHead/";
+        [SerializeField] private string dialogueHeadAddressableFolder = "Assets/VNStoryManager/Assets/ActorsHead/";
         [Tooltip("对话-头像切换 扩展名。通常为PNG格式")]
         [SerializeField] private string dialogueHeadExtension = ".png";
 #endif
@@ -667,7 +667,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         
 #if USE_ADDRESSABLES
         [Tooltip("背景资产的文件夹路径")]
-        [SerializeField] private string backgroundAddressableFolder = "Assets/Plugins/Pixel Crushers/VNStoryManager/Assets/Backgrounds/";
+        [SerializeField] private string backgroundAddressableFolder = "Assets/VNStoryManager/Assets/Backgrounds/";
         [Tooltip("背景资产的扩展名。建议使用jpg以节省空间")]
         [SerializeField] private string backgroundAddressableExtension = ".jpg";
 #endif
@@ -978,7 +978,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         [Header("角色")]
 #if USE_ADDRESSABLES
         [Tooltip("角色资产 的文件夹路径")]
-        [SerializeField] private string actorAddressableFolder = "Assets/Plugins/Pixel Crushers/VNStoryManager/Assets/Actors/";
+        [SerializeField] private string actorAddressableFolder = "Assets/VNStoryManager/Assets/Actors/";
         [Tooltip("角色资产 的扩展名。一般使用Prefab")]
         [SerializeField] private string actorAddressableExtension = ".prefab";
 #endif
@@ -1377,7 +1377,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         [Header("场景特效")]
 #if USE_ADDRESSABLES
         [Tooltip("场景特效的 文件夹路径")]
-        [SerializeField] private string effectAddressableFolder = "Assets/Plugins/Pixel Crushers/VNStoryManager/Assets/Effects/";
+        [SerializeField] private string effectAddressableFolder = "Assets/VNStoryManager/Assets/Effects/";
         [Tooltip("场景特效的 扩展名。一般使用Prefab")]
         [SerializeField] private string effectAddressableExtension = ".prefab";
 #endif
