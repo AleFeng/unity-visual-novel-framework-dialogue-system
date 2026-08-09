@@ -1,0 +1,6 @@
+SP_Role_Test_2.png
+size:698,1335
+filter:Linear,Linear
+T_Role_Test_2
+bounds:2,2,694,1331
+offsets:2,5,700,1340
