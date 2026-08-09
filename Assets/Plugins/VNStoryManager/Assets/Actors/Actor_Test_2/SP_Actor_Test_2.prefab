@@ -47,11 +47,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp-firstpass::VNRoleSpine
   m_AutoInit: 0
   m_ActorPosSpeed: 3.5
-  m_ActorPosEase: 7
+  m_ActorPosEase: 3
   m_ActorRotateSpeed: 360
-  m_ActorRotateEase: 7
+  m_ActorRotateEase: 3
   m_ActorScaleSpeed: 1.5
-  m_ActorScaleEase: 7
+  m_ActorScaleEase: 3
   m_SpineAnimator: {fileID: 8447715501771351812}
   m_StateInitList:
   - idle
