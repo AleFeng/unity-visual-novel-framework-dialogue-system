@@ -6,14 +6,11 @@ using UnityEngine.UI;
 using Fs.GameFramework.Common.AudioSystem;
 using Fs.GameFramework.Common.AssetSystem;
 using Fs.Utility.Singleton;
+using Ale.Toolkit.Runtime;
 
 #if HAS_LOCALIZATION
 using UnityEngine.Localization;
 using UnityEngine.Localization.Settings;
-#endif
-
-#if DOTWEEN
-using DG.Tweening;
 #endif
 
 namespace PixelCrushers.DialogueSystem.VNStoryFramework
@@ -264,18 +261,13 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
             // 淡入 UI
             if (uiCanvasGroup)
             {
-#if DOTWEEN
-                // DoTween 淡入动画
-                uiCanvasGroup.DOFade(1f, 0.5f).OnComplete(() =>
+                // 淡入动画
+                ToolkitTween.FadeCanvasGroup(uiCanvasGroup, 1f, 0.5f, unscaled: false, onComplete: () =>
                 {
                     // uiCanvasGroup可用
                     uiCanvasGroup.interactable = true; // 可交互
                     uiCanvasGroup.blocksRaycasts = true; // 接收射线
                 });
-#else
-                // 直接设置为完全不透明
-                uiCanvasGroup.alpha = 1f;
-#endif
             }
             else if (uiCanvas)
             {
@@ -295,23 +287,16 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
             // 淡出 UI
             if (uiCanvasGroup)
             {
-#if DOTWEEN
                 // DialogueSystem需要uiCanvas保持激活状态，因此 不进行非激活设置。
                 // uiCanvasGroup不可用
                 uiCanvasGroup.interactable = false; // 不可交互
                 uiCanvasGroup.blocksRaycasts = false; // 不接收射线
-                // DoTween 淡出动画
-                uiCanvasGroup.DOFade(0f, 0.5f).OnComplete(() =>
+                // 淡出动画
+                ToolkitTween.FadeCanvasGroup(uiCanvasGroup, 0f, 0.5f, unscaled: false, onComplete: () =>
                 {
                     // 完成回调
                     onComplete?.Invoke();
                 });
-#else
-                // 直接设置为完全透明，并非激活 UI    
-                uiCanvasGroup.alpha = 0f;
-                // 完成回调
-                onComplete?.Invoke();
-#endif
             }
             else if (uiCanvas)
             {
@@ -733,18 +718,15 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
             if (srBackgroundCurrent)
             {
                 srBackgroundCurrent.gameObject.SetActive(true);
-#if DOTWEEN
-                srBackgroundCurrent.DOKill();
-                srBackgroundCurrent.DOFade(1f, backgroundFadeDuration);
-#endif
+                // 本门面不做覆盖管理，先打断该目标上的在途补间再起新的
+                ToolkitTween.Kill(srBackgroundCurrent);
+                ToolkitTween.FadeSpriteRenderer(srBackgroundCurrent, 1f, backgroundFadeDuration, unscaled: false);
             }
             if (srBackgroundLast)
             {
                 srBackgroundLast.gameObject.SetActive(true);
-#if DOTWEEN
-                srBackgroundLast.DOKill();
-                srBackgroundLast.DOFade(0f, backgroundFadeDuration);
-#endif
+                ToolkitTween.Kill(srBackgroundLast);
+                ToolkitTween.FadeSpriteRenderer(srBackgroundLast, 0f, backgroundFadeDuration, unscaled: false);
             }
         }
         
@@ -758,23 +740,21 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
             
             if (srBackgroundCurrent)
             {
-#if DOTWEEN
-                srBackgroundCurrent.DOKill();
-                srBackgroundCurrent.DOFade(0f, backgroundFadeDuration).OnComplete(() =>
-                {
-                    srBackgroundCurrent.gameObject.SetActive(false);
-                });
-#endif
+                ToolkitTween.Kill(srBackgroundCurrent);
+                ToolkitTween.FadeSpriteRenderer(srBackgroundCurrent, 0f, backgroundFadeDuration, unscaled: false,
+                    onComplete: () =>
+                    {
+                        srBackgroundCurrent.gameObject.SetActive(false);
+                    });
             }
             if (srBackgroundLast)
             {
-#if DOTWEEN
-                srBackgroundLast.DOKill();
-                srBackgroundLast.DOFade(0f, backgroundFadeDuration).OnComplete(() =>
-                {
-                    srBackgroundLast.gameObject.SetActive(false);
-                });
-#endif
+                ToolkitTween.Kill(srBackgroundLast);
+                ToolkitTween.FadeSpriteRenderer(srBackgroundLast, 0f, backgroundFadeDuration, unscaled: false,
+                    onComplete: () =>
+                    {
+                        srBackgroundLast.gameObject.SetActive(false);
+                    });
             }
         }
         
