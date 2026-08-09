@@ -1,13 +1,12 @@
 {
   "dependencies": {
     "com.ale.toolkit": {
-      "version": "https://github.com/AleFeng/unity-ale-toolkit.git?path=/Packages/com.ale.toolkit",
+      "version": "file:../../unity-ale-toolkit/Packages/com.ale.toolkit",
       "depth": 0,
-      "source": "git",
+      "source": "local",
       "dependencies": {
         "com.unity.nuget.newtonsoft-json": "3.2.2"
-      },
-      "hash": "0de882d73dab3e54f7b03fbe6d4d25b2d72856ac"
+      }
     },
     "com.unity.addressables": {
       "version": "2.9.1",
