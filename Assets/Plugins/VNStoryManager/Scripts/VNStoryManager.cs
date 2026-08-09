@@ -1305,7 +1305,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
             if (actorPrefabLoadData.ActorAnimator)
             {
                 // 完成之前的 位置、缩放 插值动画
-                actorPrefabLoadData.ActorAnimator.CompleteDoTweenTransform();
+                actorPrefabLoadData.ActorAnimator.CompleteTransformTween();
                 
                 // 获取 角色预制体 实例的 Transform
                 var actorTrans = actorPrefabLoadData.PrefabInstance.transform;

@@ -1,11 +1,8 @@
 using System;
 using System.Collections;
 using UnityEngine;
+using Ale.Toolkit.Runtime;
 // using Fs.GameFramework.Gameplay.AnimSimulatorSystem;
-
-#if DOTWEEN
-using DG.Tweening;
-#endif
 
 namespace PixelCrushers.DialogueSystem.VNStoryFramework
 {
@@ -14,7 +11,6 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
     /// </summary>
     public class VNActorAnimator : MonoBehaviour
     {
-#if DOTWEEN
 #if UNITY_EDITOR
         private void Reset()
         {
@@ -178,16 +174,18 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
                 maxDelay = Mathf.Max(maxDelay, delayParticle);
             }
             
-            // 如果有延迟，则启动协程等待延迟后销毁
+            // 如果有延迟，则等待延迟后销毁。
+            // 刻意不传 owner：本对象正是要被销毁的目标，绑定生命周期会让回调随对象一起被丢弃，
+            // 而 VNStoryManager.UnloadActorPrefab 靠这个回调卸载资源。保持「延时独立于目标存亡」。
             if (hasDelay)
             {
-                DOVirtual.DelayedCall(maxDelay, () =>
+                ToolkitTween.DelayedCall(maxDelay, () =>
                 {
                     // 销毁对象
                     if (this != null && gameObject) Destroy(gameObject);
                     // 调用回调
                     onComplete?.Invoke();
-                });
+                }, unscaled: false);
             }
             else
             {
@@ -204,23 +202,23 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         [Tooltip("角色移动 速度（米/秒）")]
         [SerializeField] private float m_ActorPosSpeed = 3.5f;
         [Tooltip("角色移动 过渡类型")]
-        [SerializeField] private Ease m_ActorPosEase = Ease.InOutQuad;
+        [SerializeField] private EToolkitEase m_ActorPosEase = EToolkitEase.InOutQuad;
         [Tooltip("角色旋转 速度（度/秒）")]
         [SerializeField] private float m_ActorRotateSpeed = 360f;
         [Tooltip("角色旋转 过渡类型")]
-        [SerializeField] private Ease m_ActorRotateEase = Ease.InOutQuad;
+        [SerializeField] private EToolkitEase m_ActorRotateEase = EToolkitEase.InOutQuad;
         [Tooltip("角色缩放 速度（1.0=100%/秒）")]
         [SerializeField] private float m_ActorScaleSpeed = 1.5f;
         [Tooltip("角色移动 过渡类型")]
-        [SerializeField] private Ease m_ActorScaleEase = Ease.InOutQuad;
-        
+        [SerializeField] private EToolkitEase m_ActorScaleEase = EToolkitEase.InOutQuad;
+
         /// <summary>
-        /// 立刻完成 当前的移动和缩放动画
+        /// 立刻完成 当前的移动、旋转和缩放动画
         /// </summary>
-        public void CompleteDoTweenTransform()
+        public void CompleteTransformTween()
         {
-            // 立刻完成 当前的移动和缩放动画
-            transform.DOComplete();
+            // 立刻完成 本 Transform 上全部在途补间（瞬置到终值并触发完成回调）
+            ToolkitTween.Kill(transform, complete: true);
         }
         
         /// <summary>
@@ -242,7 +240,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
             // 计算过渡时间
             float duration = (targetPos - transform.position).magnitude / (m_ActorPosSpeed * speedRate);
             // 位置。平滑过渡
-            transform.DOMove(targetPos, duration).SetEase(m_ActorPosEase);
+            ToolkitTween.MoveTransform(transform, targetPos, duration, m_ActorPosEase, unscaled: false);
         }
         
         /// <summary>
@@ -264,8 +262,8 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
             // 计算过渡时间
             float angleDiff = Quaternion.Angle(Quaternion.Euler(transform.eulerAngles), Quaternion.Euler(targetRot));
             float duration = angleDiff / (m_ActorRotateSpeed * speedRate);
-            // 旋转。平滑过渡
-            transform.DORotate(targetRot, duration).SetEase(m_ActorRotateEase);
+            // 旋转。平滑过渡。逐轴走最短弧，与上面按 Quaternion.Angle 算出的时长一致
+            ToolkitTween.RotateTransform(transform, targetRot, duration, m_ActorRotateEase, unscaled: false);
         }
         
         /// <summary>
@@ -287,7 +285,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
             // 计算过渡时间
             float duration = (targetScale - transform.localScale).magnitude / (m_ActorScaleSpeed * speedRate);
             // 缩放。平滑过渡
-            transform.DOScale(targetScale, duration).SetEase(m_ActorScaleEase);
+            ToolkitTween.ScaleTransform(transform, targetScale, duration, m_ActorScaleEase, unscaled: false);
         }
         #endregion
         
@@ -386,6 +384,5 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
             return true;
         }
         #endregion
-#endif
     }
 }
