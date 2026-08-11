@@ -3,7 +3,6 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
-using Fs.GameFramework.Common.AudioSystem;
 using Fs.GameFramework.Common.AssetSystem;
 using Fs.Utility.Singleton;
 using Ale.Toolkit.Runtime;
@@ -1536,7 +1535,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
                     tweenHolder[0] = ToolkitTween.DelayedCall(delay, () =>
                     {
                         // 延迟时间到，播放背景音乐。循环播放
-                        AudioManager.Instance.PlayWithChannel(audioFieldTitle, audioKey, volume, pitch);
+                        VnStoryAudio.PlayWithChannel(audioFieldTitle, audioKey, volume, pitch);
                         // 记录 背景音乐Key
                         _dicBgmFieldTitleToAudioKey[audioFieldTitle] = audioKey;
                         // 从 延迟播放的 句柄列表中 移除
@@ -1548,7 +1547,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
                 else
                 {
                     // 立即播放背景音乐。循环播放
-                    AudioManager.Instance.PlayWithChannel(audioFieldTitle, audioKey, volume, pitch);
+                    VnStoryAudio.PlayWithChannel(audioFieldTitle, audioKey, volume, pitch);
                     // 记录 背景音乐Key
                     _dicBgmFieldTitleToAudioKey[audioFieldTitle] = audioKey;
                 }
@@ -1561,7 +1560,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         /// <param name="audioFieldTitle">音频 字段标题</param>
         private void StopBGMByFieldTitle(string audioFieldTitle)
         {
-            AudioManager.Instance.StopWithChannel(audioFieldTitle);
+            VnStoryAudio.StopWithChannel(audioFieldTitle);
         }
         
         /// <summary>
@@ -1594,7 +1593,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
             // 停止所有 记录的 背景音乐Key
             foreach (var kvp in _dicBgmFieldTitleToAudioKey)
             {
-                AudioManager.Instance.Stop(kvp.Value);
+                VnStoryAudio.Stop(kvp.Value);
             }
             _dicBgmFieldTitleToAudioKey.Clear();
         }
@@ -1623,7 +1622,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
                     tweenHolder[0] = ToolkitTween.DelayedCall(delay, () =>
                     {
                         // 延迟 播放音频
-                        AudioManager.Instance.Play(audioKey, volume, pitch);
+                        VnStoryAudio.Play(audioKey, volume, pitch);
                         // 记录 音频Key
                         _dicSfxFieldTitleToAudioKey[audioFieldTitle] = audioKey;
                         // 从 延迟播放的 句柄列表中 移除
@@ -1636,7 +1635,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
                 {
                     // 立即播放音频
                     // 立即 播放音频
-                    AudioManager.Instance.Play(audioKey, volume, pitch);
+                    VnStoryAudio.Play(audioKey, volume, pitch);
                     // 记录 音频Key
                     _dicSfxFieldTitleToAudioKey[audioFieldTitle] = audioKey;
                 }
@@ -1658,7 +1657,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
             // 停止所有 记录的 音频Key
             foreach (var kvp in _dicSfxFieldTitleToAudioKey)
             {
-                AudioManager.Instance.Stop(kvp.Value);
+                VnStoryAudio.Stop(kvp.Value);
             }
             _dicSfxFieldTitleToAudioKey.Clear();
         }
