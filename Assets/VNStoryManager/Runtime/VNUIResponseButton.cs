@@ -52,10 +52,10 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
                     var entry = response?.destinationEntry;
                     if (entry == null) return;
 
-                    if (VNStoryManager.Instance == false) return;
+                    if (VnStoryManager.Instance == false) return;
                     // 获取 选项是否已读 全局变量的名称
                     string conversationResponseButtonVariableIsRead =
-                        VNStoryManager.Instance.ConversationResponseButtonVariableIsReadFieldTitle;
+                        VnStoryManager.Instance.ConversationResponseButtonVariableIsReadFieldTitle;
                     string isReadVariableName =
                         Field.LookupValue(entry.fields, conversationResponseButtonVariableIsRead);
                     // 获取 选项是否已读 的值

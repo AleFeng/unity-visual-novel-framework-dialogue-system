@@ -85,7 +85,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         /// <param name="conversationNamePlay">要播放的 剧情对话名称。</param>
         public void Play(string conversationNamePlay)
         {
-            if (VNStoryManager.Instance == false)
+            if (VnStoryManager.Instance == false)
             {
                 Debug.LogWarning("[VNStoryPlayer] Play >> 场景中不存在 VNStoryManager 实例，无法播放剧情演出。");
                 return;
@@ -104,7 +104,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
             Subscribe();
 
             // 开始剧情对话
-            VNStoryManager.Instance.StartVnStory(conversationNamePlay);
+            VnStoryManager.Instance.StartVnStory(conversationNamePlay);
 
             IsPlaying = true;
             onPlayStarted.Invoke();
@@ -116,7 +116,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         /// </summary>
         public void Stop()
         {
-            if (VNStoryManager.Instance == false) return;
+            if (VnStoryManager.Instance == false) return;
 
             // 仅停止 由本组件播放的剧情
             if (!IsPlaying) return;
@@ -125,7 +125,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
             if (DialogueManager.lastConversationStarted != conversationName) return;
             
             // VN故事系统淡出（UI/背景淡出）
-            VNStoryManager.Instance.StopVnStory();
+            VnStoryManager.Instance.StopVnStory();
         }
         #endregion
         

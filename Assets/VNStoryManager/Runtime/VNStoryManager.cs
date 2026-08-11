@@ -41,7 +41,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
     /// <summary>
     /// VN故事系统 管理器组件。
     /// </summary>
-    public class VNStoryManager : MonoBehaviourSingleton<VNStoryManager>
+    public class VnStoryManager : MonoBehaviourSingleton<VnStoryManager>
     {
         protected override void Awake()
         {

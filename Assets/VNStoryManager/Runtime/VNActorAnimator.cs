@@ -1,27 +1,27 @@
 using System;
 using System.Collections;
 using UnityEngine;
+using UnityEngine.Serialization;
 using Ale.Toolkit.Runtime;
-// using Fs.GameFramework.Gameplay.AnimSimulatorSystem;
+using Ale.AnimSimulatorSystem;
 
 namespace PixelCrushers.DialogueSystem.VNStoryFramework
 {
     /// <summary>
-    /// 游戏角色 控制器 Spine动画
+    /// 游戏角色 控制器 动画。
+    /// 动画后端由 com.ale.animsimulatorsystem 的 AnimatorBase 抽象，
+    /// 挂 SpineAnimator 还是 Live2DAnimator 由预制体决定，本类不关心。
     /// </summary>
     public class VNActorAnimator : MonoBehaviour
     {
 #if UNITY_EDITOR
         private void Reset()
         {
-#if HAS_SPINE
-            // 获取 Spine动画组件
-            if (!m_SpineAnimator)
+            // 获取 动画播放器。FindFor 取包内三种查找顺序的并集，且含未激活对象
+            if (!m_ActorAnimator)
             {
-                // 从当前对象或子对象中 获取 Spine动画组件
-                m_SpineAnimator = GetComponentInChildren<SpineAnimator>();
+                m_ActorAnimator = AnimatorBase.FindFor(this);
             }
-#endif
         }
 #endif
         
@@ -77,12 +77,10 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
             
             yield return null;
 
-#if HAS_SPINE
-            if (m_SpineAnimator)
+            if (m_ActorAnimator)
                 // 淡入显示
-                m_SpineAnimator.FadeSpineAnimator(true);
-#endif
-            
+                m_ActorAnimator.FadeAnimator(true);
+
             // 切换状态列表
             SwitchStateArray(toStateArray);
         }
@@ -96,15 +94,13 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         public bool FadeOut()
         {
             bool handled = false;
-#if HAS_SPINE
-            if (m_SpineAnimator)
+            if (m_ActorAnimator)
             {
                 // clearAnimOnFadeOut=false：临时隐藏，仅禁用对象，保留动画数据
                 // 以便 FadeIn() 时通过 RestoreCurrentAnims() 重新播放动画
-                m_SpineAnimator.FadeSpineAnimator(false, null, clearAnimOnFadeOut: false);
+                m_ActorAnimator.FadeAnimator(false, null, clearAnimOnFadeOut: false);
                 handled = true;
             }
-#endif
             if (m_ParticleSystemRoot)
             {
                 m_ParticleSystemRoot.Stop();
@@ -125,14 +121,12 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
                 gameObject.SetActive(true);
             
             bool handled = false;
-#if HAS_SPINE
-            if (m_SpineAnimator)
+            if (m_ActorAnimator)
             {
-                // 淡入 Spine 组件（内部会调用 spineAnimator.gameObject.SetActive(true)）
-                m_SpineAnimator.FadeSpineAnimator(true);
+                // 淡入 动画播放器（内部会调用其 gameObject.SetActive(true)）
+                m_ActorAnimator.FadeAnimator(true);
                 handled = true;
             }
-#endif
             if (m_ParticleSystemRoot)
             {
                 m_ParticleSystemRoot.Play();
@@ -159,14 +153,12 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
             // 计算销毁延迟时间
             bool hasDelay = false;
             float maxDelay = 0f;
-#if HAS_SPINE
-            // 销毁 Spine动画
-            if (m_SpineAnimator && m_SpineAnimator.DestroySpineAnim(out var delaySpine))
+            // 销毁 动画播放器
+            if (m_ActorAnimator && m_ActorAnimator.DestroyAnim(out var delayAnim))
             {
                 hasDelay = true;
-                maxDelay = Mathf.Max(maxDelay, delaySpine);
+                maxDelay = Mathf.Max(maxDelay, delayAnim);
             }
-#endif
             // 销毁 粒子系统
             if (DestroyParticleSystem(out var delayParticle))
             {
@@ -291,10 +283,9 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         
         #region 动画设置
         [Header("动画设置")]
-#if HAS_SPINE
-        [Tooltip("Spine动画播放器")]
-        [SerializeField] private SpineAnimator m_SpineAnimator;
-#endif
+        [Tooltip("动画播放器。后端无关基类，挂 SpineAnimator 或 Live2DAnimator 均可")]
+        [FormerlySerializedAs("m_SpineAnimator")]
+        [SerializeField] private AnimatorBase m_ActorAnimator;
         [Tooltip("初始状态")]
         [SerializeField] private string[] m_StateInitList = new string[] { "idle" };
         
@@ -303,11 +294,9 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         /// </summary>
         private void ClearAllStates()
         {
-#if HAS_SPINE
-            // 清除所有 Spine动画
-            if (m_SpineAnimator)
-                m_SpineAnimator.ClearAllSpineAnim();
-#endif
+            // 清除所有 动画
+            if (m_ActorAnimator)
+                m_ActorAnimator.ClearAllAnim();
         }
         
         /// <summary>
@@ -316,11 +305,9 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         /// <param name="actorAnims"></param>
         public void SwitchStateArray(string[] actorAnims)
         {
-#if HAS_SPINE
-            // 清除所有 Spine动画
-            if (m_SpineAnimator)
-                m_SpineAnimator.SwitchStateArray(actorAnims);
-#endif
+            // 切换 整个状态列表
+            if (m_ActorAnimator)
+                m_ActorAnimator.SwitchAnimStateArray(actorAnims);
         }
 
         /// <summary>
@@ -331,11 +318,8 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         public void AddState(string newState)
         {
             // 添加状态
-#if HAS_SPINE
-            // Spine动画播放器
-            if (m_SpineAnimator)
-                m_SpineAnimator.AddSpineAnimState(newState);
-#endif
+            if (m_ActorAnimator)
+                m_ActorAnimator.AddAnimState(newState);
         }
         
         /// <summary>
@@ -346,11 +330,8 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         public void RemoveState(string newState)
         {
             // 移除状态
-#if HAS_SPINE
-            // Spine动画播放器
-            if (m_SpineAnimator)
-                m_SpineAnimator.RemoveSpineAnimState(newState);
-#endif
+            if (m_ActorAnimator)
+                m_ActorAnimator.RemoveAnimState(newState);
         }
         #endregion
 
