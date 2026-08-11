@@ -2428,9 +2428,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 1410395185355105299}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4e6851aca2d941608afd987a610777b6, type: 3}
+  m_Script: {fileID: 11500000, guid: 5b70b13b28634234f9734ffa4ebd582e, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp-firstpass::Fs.GameFramework.Commons.LocalizationSystem.LocalizeTmpFontEvent
+  m_EditorClassIdentifier: Ale.Toolkit.UI.Localization::Ale.Toolkit.Runtime.UI.LocalizedFontEvent
   m_LocalizedAssetReference:
     m_TableReference:
       m_TableCollectionName: GUID:ab2ea891866ea8844b4bf5c4b0334771
@@ -2444,7 +2444,7 @@ MonoBehaviour:
       m_Calls: []
   texts:
   - {fileID: 5646234763953425694}
-  localizeTmpTextEvents: []
+  textEvents: []
   fontMaterial:
     m_TableReference:
       m_TableCollectionName: 
@@ -3114,9 +3114,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 2002979518155190774}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4e6851aca2d941608afd987a610777b6, type: 3}
+  m_Script: {fileID: 11500000, guid: 5b70b13b28634234f9734ffa4ebd582e, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp-firstpass::Fs.GameFramework.Commons.LocalizationSystem.LocalizeTmpFontEvent
+  m_EditorClassIdentifier: Ale.Toolkit.UI.Localization::Ale.Toolkit.Runtime.UI.LocalizedFontEvent
   m_LocalizedAssetReference:
     m_TableReference:
       m_TableCollectionName: GUID:ab2ea891866ea8844b4bf5c4b0334771
@@ -3130,7 +3130,7 @@ MonoBehaviour:
       m_Calls: []
   texts:
   - {fileID: 1804547310533821405}
-  localizeTmpTextEvents: []
+  textEvents: []
   fontMaterial:
     m_TableReference:
       m_TableCollectionName: 
@@ -3361,9 +3361,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 2204012698937717163}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4e6851aca2d941608afd987a610777b6, type: 3}
+  m_Script: {fileID: 11500000, guid: 5b70b13b28634234f9734ffa4ebd582e, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp-firstpass::Fs.GameFramework.Commons.LocalizationSystem.LocalizeTmpFontEvent
+  m_EditorClassIdentifier: Ale.Toolkit.UI.Localization::Ale.Toolkit.Runtime.UI.LocalizedFontEvent
   m_LocalizedAssetReference:
     m_TableReference:
       m_TableCollectionName: GUID:ab2ea891866ea8844b4bf5c4b0334771
@@ -3377,7 +3377,7 @@ MonoBehaviour:
       m_Calls: []
   texts:
   - {fileID: 8872536664444145862}
-  localizeTmpTextEvents: []
+  textEvents: []
   fontMaterial:
     m_TableReference:
       m_TableCollectionName: 
@@ -3811,9 +3811,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 4301524566001722427}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4e6851aca2d941608afd987a610777b6, type: 3}
+  m_Script: {fileID: 11500000, guid: 5b70b13b28634234f9734ffa4ebd582e, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp-firstpass::Fs.GameFramework.Commons.LocalizationSystem.LocalizeTmpFontEvent
+  m_EditorClassIdentifier: Ale.Toolkit.UI.Localization::Ale.Toolkit.Runtime.UI.LocalizedFontEvent
   m_LocalizedAssetReference:
     m_TableReference:
       m_TableCollectionName: GUID:ab2ea891866ea8844b4bf5c4b0334771
@@ -3827,7 +3827,7 @@ MonoBehaviour:
       m_Calls: []
   texts:
   - {fileID: 6891832399107581156}
-  localizeTmpTextEvents: []
+  textEvents: []
   fontMaterial:
     m_TableReference:
       m_TableCollectionName: 
@@ -4058,9 +4058,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 5036184087164979127}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4e6851aca2d941608afd987a610777b6, type: 3}
+  m_Script: {fileID: 11500000, guid: 5b70b13b28634234f9734ffa4ebd582e, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp-firstpass::Fs.GameFramework.Commons.LocalizationSystem.LocalizeTmpFontEvent
+  m_EditorClassIdentifier: Ale.Toolkit.UI.Localization::Ale.Toolkit.Runtime.UI.LocalizedFontEvent
   m_LocalizedAssetReference:
     m_TableReference:
       m_TableCollectionName: GUID:ab2ea891866ea8844b4bf5c4b0334771
@@ -4074,7 +4074,7 @@ MonoBehaviour:
       m_Calls: []
   texts:
   - {fileID: 1338694396611250840}
-  localizeTmpTextEvents: []
+  textEvents: []
   fontMaterial:
     m_TableReference:
       m_TableCollectionName: 
@@ -4298,9 +4298,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 5168099732614446471}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4e6851aca2d941608afd987a610777b6, type: 3}
+  m_Script: {fileID: 11500000, guid: 5b70b13b28634234f9734ffa4ebd582e, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp-firstpass::Fs.GameFramework.Commons.LocalizationSystem.LocalizeTmpFontEvent
+  m_EditorClassIdentifier: Ale.Toolkit.UI.Localization::Ale.Toolkit.Runtime.UI.LocalizedFontEvent
   m_LocalizedAssetReference:
     m_TableReference:
       m_TableCollectionName: GUID:ab2ea891866ea8844b4bf5c4b0334771
@@ -4314,7 +4314,7 @@ MonoBehaviour:
       m_Calls: []
   texts:
   - {fileID: 6091338101443756637}
-  localizeTmpTextEvents: []
+  textEvents: []
   fontMaterial:
     m_TableReference:
       m_TableCollectionName: 
@@ -4563,9 +4563,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 5759797857526407055}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4e6851aca2d941608afd987a610777b6, type: 3}
+  m_Script: {fileID: 11500000, guid: 5b70b13b28634234f9734ffa4ebd582e, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp-firstpass::Fs.GameFramework.Commons.LocalizationSystem.LocalizeTmpFontEvent
+  m_EditorClassIdentifier: Ale.Toolkit.UI.Localization::Ale.Toolkit.Runtime.UI.LocalizedFontEvent
   m_LocalizedAssetReference:
     m_TableReference:
       m_TableCollectionName: GUID:ab2ea891866ea8844b4bf5c4b0334771
@@ -4579,7 +4579,7 @@ MonoBehaviour:
       m_Calls: []
   texts:
   - {fileID: 8172396575105129484}
-  localizeTmpTextEvents: []
+  textEvents: []
   fontMaterial:
     m_TableReference:
       m_TableCollectionName: 
@@ -4901,9 +4901,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 7261576779709487526}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4e6851aca2d941608afd987a610777b6, type: 3}
+  m_Script: {fileID: 11500000, guid: 5b70b13b28634234f9734ffa4ebd582e, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp-firstpass::Fs.GameFramework.Commons.LocalizationSystem.LocalizeTmpFontEvent
+  m_EditorClassIdentifier: Ale.Toolkit.UI.Localization::Ale.Toolkit.Runtime.UI.LocalizedFontEvent
   m_LocalizedAssetReference:
     m_TableReference:
       m_TableCollectionName: GUID:ab2ea891866ea8844b4bf5c4b0334771
@@ -4917,7 +4917,7 @@ MonoBehaviour:
       m_Calls: []
   texts:
   - {fileID: 3392943718640945791}
-  localizeTmpTextEvents: []
+  textEvents: []
   fontMaterial:
     m_TableReference:
       m_TableCollectionName: 
@@ -5146,9 +5146,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 8846255823686466198}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4e6851aca2d941608afd987a610777b6, type: 3}
+  m_Script: {fileID: 11500000, guid: 5b70b13b28634234f9734ffa4ebd582e, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp-firstpass::Fs.GameFramework.Commons.LocalizationSystem.LocalizeTmpFontEvent
+  m_EditorClassIdentifier: Ale.Toolkit.UI.Localization::Ale.Toolkit.Runtime.UI.LocalizedFontEvent
   m_LocalizedAssetReference:
     m_TableReference:
       m_TableCollectionName: GUID:ab2ea891866ea8844b4bf5c4b0334771
@@ -5162,7 +5162,7 @@ MonoBehaviour:
       m_Calls: []
   texts:
   - {fileID: 7383919870932247526}
-  localizeTmpTextEvents: []
+  textEvents: []
   fontMaterial:
     m_TableReference:
       m_TableCollectionName: 
