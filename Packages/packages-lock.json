@@ -1,5 +1,12 @@
 {
   "dependencies": {
+    "com.ale.animsimulatorsystem": {
+      "version": "https://github.com/AleFeng/unity-ale-anim-simulator.git?path=/Packages/com.ale.animsimulatorsystem",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {},
+      "hash": "4dd91648066dc171d3815410637347029e1dd5f4"
+    },
     "com.ale.toolkit": {
       "version": "file:../../unity-ale-toolkit/Packages/com.ale.toolkit",
       "depth": 0,
@@ -7,6 +14,35 @@
       "dependencies": {
         "com.unity.nuget.newtonsoft-json": "3.2.2"
       }
+    },
+    "com.esotericsoftware.spine.spine-csharp": {
+      "version": "https://github.com/EsotericSoftware/spine-runtimes.git?path=spine-csharp/src#4.2",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {},
+      "hash": "b81e5a58ed38704aee4f866f0e0ac672623ce914"
+    },
+    "com.esotericsoftware.spine.spine-unity": {
+      "version": "https://github.com/EsotericSoftware/spine-runtimes.git?path=spine-unity/Assets/Spine#4.2",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {
+        "com.unity.ugui": "1.0.0",
+        "com.unity.modules.animation": "1.0.0",
+        "com.unity.modules.physics": "1.0.0",
+        "com.unity.modules.physics2d": "1.0.0",
+        "com.esotericsoftware.spine.spine-csharp": "4.2.0"
+      },
+      "hash": "b81e5a58ed38704aee4f866f0e0ac672623ce914"
+    },
+    "com.esotericsoftware.spine.urp-shaders": {
+      "version": "https://github.com/EsotericSoftware/spine-runtimes.git?path=spine-unity/Modules/com.esotericsoftware.spine.urp-shaders#4.2",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {
+        "com.unity.render-pipelines.universal": "7.1.5"
+      },
+      "hash": "b81e5a58ed38704aee4f866f0e0ac672623ce914"
     },
     "com.unity.addressables": {
       "version": "2.9.1",
