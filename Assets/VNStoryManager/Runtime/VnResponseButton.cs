@@ -10,9 +10,9 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
 {
     /// <summary>
     /// 选项按钮。
-    /// VNStoryManager专用，会根据 是否已读 的状态，切换不同的文本颜色、按钮颜色、提示对象显示、图片颜色等UI显示。
+    /// VnStoryManager专用，会根据 是否已读 的状态，切换不同的文本颜色、按钮颜色、提示对象显示、图片颜色等UI显示。
     /// </summary>
-    public class VNResponseButton : StandardUIResponseButton
+    public class VnResponseButton : StandardUIResponseButton
     {
         [Tooltip("图片列表：可包含多个图片组件，根据 是否已读的状态 设置图片的颜色。")] [SerializeField]
         private Image[] stateImageArray;

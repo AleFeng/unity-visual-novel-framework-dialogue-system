@@ -12,7 +12,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
     /// 动画后端由 com.ale.animsimulatorsystem 的 AnimatorBase 抽象，
     /// 挂 SpineAnimator 还是 Live2DAnimator 由预制体决定，本类不关心。
     /// </summary>
-    public class VNActorAnimator : MonoBehaviour
+    public class VnActorAnimator : MonoBehaviour
     {
 #if UNITY_EDITOR
         private void Reset()
@@ -168,7 +168,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
             
             // 如果有延迟，则等待延迟后销毁。
             // 刻意不传 owner：本对象正是要被销毁的目标，绑定生命周期会让回调随对象一起被丢弃，
-            // 而 VNStoryManager.UnloadActorPrefab 靠这个回调卸载资源。保持「延时独立于目标存亡」。
+            // 而 VnStoryManager.UnloadActorPrefab 靠这个回调卸载资源。保持「延时独立于目标存亡」。
             if (hasDelay)
             {
                 ToolkitTween.DelayedCall(maxDelay, () =>

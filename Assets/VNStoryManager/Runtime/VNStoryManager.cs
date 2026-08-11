@@ -35,7 +35,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         /// <summary>
         /// 角色动画组件。
         /// </summary>
-        public VNActorAnimator ActorAnimator;
+        public VnActorAnimator ActorAnimator;
     }
     
     /// <summary>
@@ -1153,7 +1153,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
                 }
                 
                 // 获取角色Spine动画组件
-                var actorAnimator = actorPrefab.GetComponent<VNActorAnimator>();
+                var actorAnimator = actorPrefab.GetComponent<VnActorAnimator>();
                 if (!actorAnimator)
                 {
                     Debug.LogWarning($"剧情演出 >> Actor预制体 '{actorAssetPrefab}' 中未找到 SkeletonAnimation 组件。请检查预制体设置。");
@@ -1168,7 +1168,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
                     AssetAddress = actorAssetPrefabAddress,
                     PrefabAsset = actorPrefab,
                     PrefabInstance = actorPrefabInstance,
-                    ActorAnimator = actorPrefabInstance.GetComponent<VNActorAnimator>()
+                    ActorAnimator = actorPrefabInstance.GetComponent<VnActorAnimator>()
                 };
                 _mapActorAnimator[actorFieldTitleName] = actorAnimsLoadData;
                 
@@ -1317,7 +1317,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         #region 角色、特效 淡入淡出
         /// <summary>
         /// 淡出 所有角色和特效。
-        /// 若预制体带有 VNActorAnimator 则执行淡出动画；
+        /// 若预制体带有 VnActorAnimator 则执行淡出动画；
         /// 否则为普通预制体，直接设置非激活（可能只是暂时被隐藏，之后还需恢复）。
         /// </summary>
         private void FadeOutActorsAndEffects()
@@ -1327,11 +1327,11 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
                 var data = kvp.Value;
                 if (data.ActorAnimator)
                 {
-                    // 有 VNActorAnimator，尝试淡出
+                    // 有 VnActorAnimator，尝试淡出
                     bool handled = data.ActorAnimator.FadeOut();
                     if (!handled && data.PrefabInstance)
                     {
-                        // VNActorAnimator 无法淡出（无Spine/粒子），降级为设置非激活
+                        // VnActorAnimator 无法淡出（无Spine/粒子），降级为设置非激活
                         data.PrefabInstance.SetActive(false);
                     }
                 }
@@ -1345,7 +1345,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         
         /// <summary>
         /// 淡入 所有角色和特效。
-        /// 若预制体带有 VNActorAnimator 则执行淡入动画；
+        /// 若预制体带有 VnActorAnimator 则执行淡入动画；
         /// 否则为普通预制体，直接设置激活。
         /// </summary>
         private void FadeInActorsAndEffects()
@@ -1355,11 +1355,11 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
                 var data = kvp.Value;
                 if (data.ActorAnimator)
                 {
-                    // 有 VNActorAnimator，尝试淡入
+                    // 有 VnActorAnimator，尝试淡入
                     bool handled = data.ActorAnimator.FadeIn();
                     if (!handled && data.PrefabInstance)
                     {
-                        // VNActorAnimator 无法淡入（无Spine/粒子），降级为设置激活
+                        // VnActorAnimator 无法淡入（无Spine/粒子），降级为设置激活
                         data.PrefabInstance.SetActive(true);
                     }
                 }
@@ -1680,18 +1680,18 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         {
             if (string.IsNullOrEmpty(fieldTitle))
             {
-                Debug.LogWarning("[VNStoryManager] RegisterGameplaySystem >> fieldTitle 不能为空。");
+                Debug.LogWarning("[VnStoryManager] RegisterGameplaySystem >> fieldTitle 不能为空。");
                 return;
             }
             if (callback == null)
             {
-                Debug.LogWarning($"[VNStoryManager] RegisterGameplaySystem >> 注册 '{fieldTitle}' 时，callback 不能为 null。");
+                Debug.LogWarning($"[VnStoryManager] RegisterGameplaySystem >> 注册 '{fieldTitle}' 时，callback 不能为 null。");
                 return;
             }
 
             if (_gameplaySystemRegistry.ContainsKey(fieldTitle))
             {
-                Debug.LogWarning($"[VNStoryManager] RegisterGameplaySystem >> '{fieldTitle}' 已经注册过了。将覆盖之前的注册。");
+                Debug.LogWarning($"[VnStoryManager] RegisterGameplaySystem >> '{fieldTitle}' 已经注册过了。将覆盖之前的注册。");
                 _gameplaySystemRegistry[fieldTitle] = callback;
             }
             else
@@ -1919,7 +1919,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         {
             if (_variableGetterRegistryMap.ContainsKey(variableName))
             {
-                Debug.LogWarning($"[VNStoryManager] RegisterVariable >> 变量名 '{variableName}' 已经注册过了。将覆盖之前的注册。");
+                Debug.LogWarning($"[VnStoryManager] RegisterVariable >> 变量名 '{variableName}' 已经注册过了。将覆盖之前的注册。");
                 _variableGetterRegistryMap[variableName] = valueGetter;
             }
             else

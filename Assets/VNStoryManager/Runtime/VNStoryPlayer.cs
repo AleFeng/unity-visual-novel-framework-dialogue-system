@@ -6,10 +6,10 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
 {
     /// <summary>
     /// 剧情演出 播放组件。
-    /// 通过 VNStoryManager.Instance 启动/停止某段剧情对话的演出，
+    /// 通过 VnStoryManager.Instance 启动/停止某段剧情对话的演出，
     /// 可在 Inspector 直接配置对话名与自动播放时机，也可被 Button.OnClick 或其他脚本调用触发。
     /// </summary>
-    public class VNStoryPlayer : MonoBehaviour
+    public class VnStoryPlayer : MonoBehaviour
     {
         private void OnEnable()
         {
@@ -73,7 +73,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         {
             if (string.IsNullOrEmpty(conversationName))
             {
-                Debug.LogWarning("[VNStoryPlayer] Play >> 对话名称为空，无法播放剧情演出。请在组件上配置或通过代码传入。", this);
+                Debug.LogWarning("[VnStoryPlayer] Play >> 对话名称为空，无法播放剧情演出。请在组件上配置或通过代码传入。", this);
                 return;
             }
             Play(conversationName);
@@ -87,13 +87,13 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         {
             if (VnStoryManager.Instance == false)
             {
-                Debug.LogWarning("[VNStoryPlayer] Play >> 场景中不存在 VNStoryManager 实例，无法播放剧情演出。");
+                Debug.LogWarning("[VnStoryPlayer] Play >> 场景中不存在 VnStoryManager 实例，无法播放剧情演出。");
                 return;
             }
 
             if (string.IsNullOrEmpty(conversationNamePlay))
             {
-                Debug.LogWarning("[VNStoryPlayer] Play >> 对话名称为空，无法播放剧情演出。请在组件上配置或通过代码传入。", this);
+                Debug.LogWarning("[VnStoryPlayer] Play >> 对话名称为空，无法播放剧情演出。请在组件上配置或通过代码传入。", this);
                 return;
             }
 
