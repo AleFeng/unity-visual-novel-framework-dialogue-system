@@ -116,7 +116,9 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         /// </summary>
         public void Stop()
         {
-            if (VnStoryManager.Instance == false) return;
+            // ToolkitMonoSingleton 的 Instance 在退出播放时不会转为 null，而 OnDisable 会在退出时
+            // 触发本方法 → StopVnStory() → 各种淡出，落到正在被拆掉的对象上。故先看退出标记。
+            if (VnStoryManager.IsQuitting || VnStoryManager.Instance == false) return;
 
             // 仅停止 由本组件播放的剧情
             if (!IsPlaying) return;

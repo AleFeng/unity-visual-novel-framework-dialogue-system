@@ -3,7 +3,6 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
-using Fs.Utility.Singleton;
 using Ale.Toolkit.Runtime;
 
 #if HAS_LOCALIZATION
@@ -39,12 +38,15 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
     /// <summary>
     /// VN故事系统 管理器组件。
     /// </summary>
-    public class VnStoryManager : MonoBehaviourSingleton<VnStoryManager>
+    public class VnStoryManager : ToolkitMonoSingleton<VnStoryManager>
     {
         protected override void Awake()
         {
             base.Awake();
-            
+            // 基类判定为重复实例时会销毁本对象并 return，但派生类的 override 仍会继续执行。
+            // 若不在此处拦下，下面的 Lua 函数注册会把绑定改到一个即将被销毁的对象上。
+            if (Instance != this) return;
+
             // 注册Lua函数-背景淡入淡出时间
             Lua.RegisterFunction("BackgroundFadeDuration", this, SymbolExtensions.GetMethodInfo(() => BackgroundFadeDuration(0)));
             // 注册持久化数据
@@ -65,8 +67,12 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
 
         protected override void OnDestroy()
         {
+            // 与 Awake 对称：重复实例从未做过下面这些注册，也就不该反注册。
+            // 注意要在 base.OnDestroy() 之前判断——基类会把 Instance 置空。
+            bool isSingletonInstance = Instance == this;
             base.OnDestroy();
-            
+            if (!isSingletonInstance) return;
+
             // 注销持久化数据
             PersistentDataManager.UnregisterPersistentData(gameObject);
             
