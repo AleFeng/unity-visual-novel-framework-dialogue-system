@@ -3,7 +3,6 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
-using Fs.GameFramework.Common.AssetSystem;
 using Fs.Utility.Singleton;
 using Ale.Toolkit.Runtime;
 
@@ -319,7 +318,10 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         private readonly Dictionary<string, int> _dicPendingUnloadAfterLoad = new Dictionary<string, int>();
         
         /// <summary>
-        /// 加载资源。
+        /// 加载资源。委派给 <see cref="ToolkitAssets"/>：启用 ATK_ADDRESSABLE 时走 Addressables 异步加载，
+        /// 否则回退 Resources（同步）。本方法在其之上做引用计数与「加载中被请求卸载」的簿记。
+        /// <para>地址格式同样由 ATK_ADDRESSABLE 决定（启用时带文件夹路径与扩展名，否则是裸名），
+        /// 与加载后端共用同一个宏，避免出现「完整路径 + Resources」这种必然取不到的组合。</para>
         /// </summary>
         /// <param name="assetAddress"></param>
         /// <param name="onAssetLoaded"></param>
@@ -338,7 +340,10 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
 
             // 增加 资源加载计数器
             _dicLoadingAssetCounter[assetAddress] = _dicLoadingAssetCounter.GetValueOrDefault(assetAddress, 0) + 1;
-            // 加载中，禁止跳过对话
+            // 加载中，禁止跳过对话。
+            // 注意：直接模式（未启用 ATK_ADDRESSABLE）下 ToolkitAssets 是同步回调，下面的 callback
+            // 会在同一调用栈内把它改回 true——本守卫因而实际不生效，且每次请求都会把继续按钮
+            // 关一次再开一次。接上真正的异步后端后语义自然恢复，故此处不改逻辑。
             SetContinueButtonActive(false);
             Action<T> callback = (asset) =>
             {
@@ -363,7 +368,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
                     if (pendingCount <= 0) _dicPendingUnloadAfterLoad.Remove(assetAddress);
                     else _dicPendingUnloadAfterLoad[assetAddress] = pendingCount;
                     // 卸载资源
-                    AssetManager.Instance.UnloadAsset(assetAddress);
+                    ToolkitAssets.ReleaseAddress(assetAddress);
 
                     return;
                 }
@@ -377,7 +382,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
                 onAssetLoaded?.Invoke(asset);
             };
             
-            AssetManager.Instance.LoadAsset(assetAddress, callback);
+            ToolkitAssets.LoadByAddress(assetAddress, callback);
         }
         
         /// <summary>
@@ -397,12 +402,14 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
                 {
                     _dicLoadedAssetCounter.Remove(assetAddress);
                     // 卸载资源
-                    AssetManager.Instance.UnloadAsset(assetAddress);
+                    ToolkitAssets.ReleaseAddress(assetAddress);
                     // 从已加载资源表中移除
                     _dicLoadedAssets.Remove(assetAddress);
                 }
             }
-            // 检查 是否 正在加载资源
+            // 检查 是否 正在加载资源。
+            // 同上：同步回调下 _dicLoadingAssetCounter 在 LoadAsset 返回前就已清空，本分支
+            // 与 LoadAsset 里消费 _dicPendingUnloadAfterLoad 的那段目前都到不了；接上异步后端后才活。
             else if (_dicLoadingAssetCounter.TryGetValue(assetAddress, out var loadingCount))
             {
                 // 减少 正在加载资源计数器（安全处理，防止出现负数）
@@ -554,7 +561,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
 
         #region 头像切换
         [Header("对话-头像切换")]
-#if USE_ADDRESSABLES
+#if ATK_ADDRESSABLE
         [Tooltip("对话-头像切换 文件夹路径")]
         [SerializeField] private string dialogueHeadAddressableFolder = "Assets/VNStoryManager/Assets/ActorsHead/";
         [Tooltip("对话-头像切换 扩展名。通常为PNG格式")]
@@ -599,7 +606,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
             
             // 记录上一个头像地址，构造当前的资源地址（如果使用Addressables会加上路径和扩展名）
             _dialogueHeadAssetNameLast = _dialogueHeadAssetName;
-#if USE_ADDRESSABLES
+#if ATK_ADDRESSABLE
             _dialogueHeadAssetName = $"{dialogueHeadAddressableFolder}{headImageName}{dialogueHeadExtension}";
 #else
             _dialogueHeadAssetName = headImageName;
@@ -664,7 +671,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
         [Tooltip("背景图像组件 上次（用于淡入淡出效果）")]
         [SerializeField] private SpriteRenderer srBackgroundLast;
         
-#if USE_ADDRESSABLES
+#if ATK_ADDRESSABLE
         [Tooltip("背景资产的文件夹路径")]
         [SerializeField] private string backgroundAddressableFolder = "Assets/VNStoryManager/Assets/Backgrounds/";
         [Tooltip("背景资产的扩展名。建议使用jpg以节省空间")]
@@ -837,7 +844,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
             _backgroundAssetNameLast = _backgroundAssetName;
             // 记录背景图像名称
             _backgroundAssetName = backgroundName;
-#if USE_ADDRESSABLES
+#if ATK_ADDRESSABLE
             // 使用Addressables时，添加文件夹路径
             _backgroundAssetName = $"{backgroundAddressableFolder}{backgroundName}{backgroundAddressableExtension}";
 #endif
@@ -975,7 +982,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
 
         #region 角色
         [Header("角色")]
-#if USE_ADDRESSABLES
+#if ATK_ADDRESSABLE
         [Tooltip("角色资产 的文件夹路径")]
         [SerializeField] private string actorAddressableFolder = "Assets/VNStoryManager/Assets/Actors/";
         [Tooltip("角色资产 的扩展名。一般使用Prefab")]
@@ -1021,7 +1028,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
                 {
                     // 获取 角色预制体名称 和 延迟显示时间
                     ParseStringAndFloat(actorPrefabParam, out var actorAssetPrefab, out var delay);
-#if USE_ADDRESSABLES
+#if ATK_ADDRESSABLE
                     // 使用Addressables时，添加文件夹路径
                     var actorAssetPrefabAddress = $"{actorAddressableFolder}{actorAssetPrefab}{actorAddressableExtension}";
 #else
@@ -1374,7 +1381,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
 
         #region 场景特效
         [Header("场景特效")]
-#if USE_ADDRESSABLES
+#if ATK_ADDRESSABLE
         [Tooltip("场景特效的 文件夹路径")]
         [SerializeField] private string effectAddressableFolder = "Assets/VNStoryManager/Assets/Effects/";
         [Tooltip("场景特效的 扩展名。一般使用Prefab")]
@@ -1412,7 +1419,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
                 {
                     // 获取 特效预制体名称 和 延迟显示时间
                     ParseStringAndFloat(effectPrefabParam, out var effectAssetPrefab, out var delay);
-#if USE_ADDRESSABLES
+#if ATK_ADDRESSABLE
                     // 使用Addressables时，添加文件夹路径
                     var effectAssetPrefabAddress = $"{effectAddressableFolder}{effectAssetPrefab}{effectAddressableExtension}";
 #else
