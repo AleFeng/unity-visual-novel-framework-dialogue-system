@@ -1,11 +1,10 @@
 {
   "dependencies": {
     "com.ale.animsimulatorsystem": {
-      "version": "https://github.com/AleFeng/unity-ale-anim-simulator.git?path=/Packages/com.ale.animsimulatorsystem",
+      "version": "file:E:/ProjectUnity/unity-ale-anim-simulator/Packages/com.ale.animsimulatorsystem",
       "depth": 0,
-      "source": "git",
-      "dependencies": {},
-      "hash": "cb350e1ea5b230658be0aadb8baacf237c8dc710"
+      "source": "local",
+      "dependencies": {}
     },
     "com.ale.toolkit": {
       "version": "file:../../unity-ale-toolkit/Packages/com.ale.toolkit",

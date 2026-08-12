@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "com.ale.animsimulatorsystem": "https://github.com/AleFeng/unity-ale-anim-simulator.git?path=/Packages/com.ale.animsimulatorsystem",
+    "com.ale.animsimulatorsystem": "file:E:/ProjectUnity/unity-ale-anim-simulator/Packages/com.ale.animsimulatorsystem",
     "com.ale.toolkit": "file:../../unity-ale-toolkit/Packages/com.ale.toolkit",
     "com.coplaydev.unity-mcp": "https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#main",
     "com.esotericsoftware.spine.spine-csharp": "https://github.com/EsotericSoftware/spine-runtimes.git?path=spine-csharp/src#4.2",
