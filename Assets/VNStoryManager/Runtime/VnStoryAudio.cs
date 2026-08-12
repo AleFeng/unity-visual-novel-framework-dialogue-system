@@ -4,7 +4,7 @@ using UnityEngine;
 using Fs.GameFramework.Common.AudioSystem;
 #endif
 
-namespace PixelCrushers.DialogueSystem.VNStoryFramework
+namespace PixelCrushers.DialogueSystem.VnStoryFramework
 {
     /// <summary>
     /// VN 剧情演出的音频接缝。
@@ -14,7 +14,7 @@ namespace PixelCrushers.DialogueSystem.VNStoryFramework
     /// 由 <c>VNS_FS_GAMEFRAMEWORK</c> 宏开关：开启时接 FsGameFramework 的 <c>AudioManager</c>；
     /// 关闭时全部为空操作——不报错、不出声，演出流程照常推进。</para>
     ///
-    /// <para>宏由后续的 VNStory 欢迎窗口统一开关。<b>不要在模块的其他地方直接引用音频后端的类型</b>，
+    /// <para>宏由后续的 VnStory 欢迎窗口统一开关。<b>不要在模块的其他地方直接引用音频后端的类型</b>，
     /// 否则这个接缝就失去意义了。</para>
     /// </summary>
     internal static class VnStoryAudio

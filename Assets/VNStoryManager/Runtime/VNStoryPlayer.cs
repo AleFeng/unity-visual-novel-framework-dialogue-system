@@ -2,7 +2,7 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.Events;
 
-namespace PixelCrushers.DialogueSystem.VNStoryFramework
+namespace PixelCrushers.DialogueSystem.VnStoryFramework
 {
     /// <summary>
     /// 剧情演出 播放组件。

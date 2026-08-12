@@ -5,7 +5,7 @@ using UnityEngine.Serialization;
 using Ale.Toolkit.Runtime;
 using Ale.AnimSimulatorSystem;
 
-namespace PixelCrushers.DialogueSystem.VNStoryFramework
+namespace PixelCrushers.DialogueSystem.VnStoryFramework
 {
     /// <summary>
     /// 游戏角色 控制器 动画。

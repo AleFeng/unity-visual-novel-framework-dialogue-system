@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 2474151421837848117}
   - component: {fileID: 8285465569824699616}
   m_Layer: 0
-  m_Name: VNStoryPlayer
+  m_Name: VnStoryPlayer
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

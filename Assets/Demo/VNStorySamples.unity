@@ -885,7 +885,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7489943422770335279, guid: d9bf45828f6828b458ebfcaefcdf4f99, type: 3}
       propertyPath: m_Name
-      value: VNStoryPlayer
+      value: VnStoryPlayer
       objectReference: {fileID: 0}
     - target: {fileID: 8285465569824699616, guid: d9bf45828f6828b458ebfcaefcdf4f99, type: 3}
       propertyPath: autoPlayTiming
@@ -1187,7 +1187,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7320663833178550963, guid: f3f46ed1b19e970448169f8fb4355939, type: 3}
       propertyPath: m_Name
-      value: VNStoryManager
+      value: VnStoryManager
       objectReference: {fileID: 0}
     - target: {fileID: 7320663833179039635, guid: f3f46ed1b19e970448169f8fb4355939, type: 3}
       propertyPath: m_LocalPosition.x

@@ -6,7 +6,7 @@ using Ale.Toolkit.Runtime;
 using TMPro;
 #endif
 
-namespace PixelCrushers.DialogueSystem.VNStoryFramework
+namespace PixelCrushers.DialogueSystem.VnStoryFramework
 {
     /// <summary>
     /// 选项按钮。
