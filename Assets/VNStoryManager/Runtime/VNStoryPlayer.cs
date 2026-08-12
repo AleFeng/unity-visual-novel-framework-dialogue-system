@@ -126,7 +126,7 @@ namespace PixelCrushers.DialogueSystem.VnStoryFramework
             if (!DialogueManager.IsConversationActive) return;
             if (DialogueManager.lastConversationStarted != conversationName) return;
             
-            // VN故事系统淡出（UI/背景淡出）
+            // Vn故事系统淡出（UI/背景淡出）
             VnStoryManager.Instance.StopVnStory();
         }
         #endregion

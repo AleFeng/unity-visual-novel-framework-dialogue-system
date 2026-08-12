@@ -1,10 +1,10 @@
-# VNStoryManager 剧情演出系统-使用文档
+# VnStoryManager 剧情演出系统-使用文档
 
 - 返回 [说明文档](../../README.md)
 
 # 📜目录
 
-- [VNStoryManager 剧情演出系统-使用文档](#vnstorymanager-剧情演出系统-使用文档)
+- [VnStoryManager 剧情演出系统-使用文档](#vnstorymanager-剧情演出系统-使用文档)
 - [📜目录](#目录)
 - [官方教程](#官方教程)
 - [示例场景](#示例场景)
@@ -75,7 +75,7 @@
 ![alt text](image-14.png)
 
 - 示例场景
-  - Assets\Plugins\Pixel Crushers\VNStoryManager\VNStorySamples.unity
+  - Assets\Plugins\Pixel Crushers\VnStoryManager\VnStorySamples.unity
   - 打开示例场景，直接 运行游戏 就能在 Game窗口中看到剧情演出的内容。
 
 <video controls="" poster="" src="Movie_011.mp4" ></videos>
@@ -98,16 +98,16 @@
 ![alt text](image-62.png)
 
 - 正式游戏资产
-  - 剧情演出管理器：Assets\Resources\Managers\VNStoryManager.prefab
+  - 剧情演出管理器：Assets\Resources\Managers\VnStoryManager.prefab
   - 角色预制体：Assets\ProductAssets\Story\Actors\
   - 角色头像：Assets\ProductAssets\Story\ActorsHead\
   - 背景图片：Assets\ProductAssets\Story\Backgrounds\
   - 特效预制体：Assets\ProductAssets\Story\Effects\
   - 剧情演出数据：Assets\ProductAssets\Story\Data\StoryDatabase_Main.asset
-  - 多语言文本表：Assets\ProductAssets\Story\TextTable\VNStory Text Table.asset
+  - 多语言文本表：Assets\ProductAssets\Story\TextTable\VnStory Text Table.asset
   - UI界面预制体：Assets\ProductAssets\Story\UI\DialogueUI_Main.prefab
 - 测试场景
-  - Assets\Scenes\Test\VNStoryTest.unity
+  - Assets\Scenes\Test\VnStoryTest.unity
   - 打开测试场景，直接 运行游戏 就能在 Game窗口中看到 剧情演出的内容。
 
 # 快速入门
@@ -118,14 +118,14 @@
 ![alt text](image.png)
 
 - 打开测试场景。
-  - 打开 Assets\Scenes\Test\VNStoryTest 场景。
+  - 打开 Assets\Scenes\Test\VnStoryTest 场景。
   - 在测试场景中，可以直接进入 剧情演出 来进行测试。
 
 ![alt text](image-1.png)
 
 - 找到 剧情演出的 数据文件。
   - 在 Hierarchy 面板中，显示了 当前场景中的 所有物体。
-  - 选中 VNStoryManager 物体，在 Inspector 面板中，会显示 选中物体的 所有组件 及其 数据。
+  - 选中 VnStoryManager 物体，在 Inspector 面板中，会显示 选中物体的 所有组件 及其 数据。
   - 在 DialogueSystemController 组件上，配置了一些 剧情演出相关的数据。
   - 点击组件中 Initial Database 栏右侧 配置的数据文件，就会在Project面板中 快速找到 指定的文件。
     ![alt text](image-2.png)
@@ -183,8 +183,8 @@
 ![alt text](image-12.png)
 
 - 测试 剧情演出 对话流程。
-  - 打开 Assets\Plugins\Pixel Crushers\VNStoryManager\VNStorySamples.unity 测试场景。
-  - 点击选中 场景中的 VNStoryManager 物体，在 Inspector 面板中找到 VN Story Manager组件。
+  - 打开 Assets\Plugins\Pixel Crushers\VnStoryManager\VnStorySamples.unity 测试场景。
+  - 点击选中 场景中的 VnStoryManager 物体，在 Inspector 面板中找到 Vn Story Manager组件。
   - Test Story Conversation栏中，填写 想要测试的 Conversation 的名称。即之前在Conversation的Title栏中填写的“第一章-第一节”。
   - 勾选 Auto Start Test Conversation，运行游戏时 就会自动运行 Test Story Conversation 中配置的剧情演出。
   - 最后，点击 上方中央的[开始]按钮 就可以运行游戏，进行剧情演出的测试。
@@ -275,11 +275,11 @@
 
 ![alt text](image-55.png)
 
-- 添加 VN Actor Animator 组件。
+- 添加 Vn Actor Animator 组件。
   - 鼠标单击 选中 Hierarchy面板中的 预制体的根物体。
-  - 在 Inspector面板中 点击 [Add Component]按钮 添加 VN Actor Animator 组件。可以在 搜索框 中进行搜索。
-  - VN Actor Animator 组件的 Spine Animator Base 通常会自动获取。
-    - 自动获取失败时，需要手动指定。把 Hierarchy面板中的 Spine GameObject (图示中命名为SP_Role_Test_1) ，鼠标拖拽到 VN Actor Animator 组件的 Spine Animator Base 栏中，作为 基础的Spine动画对象 进行使用。
+  - 在 Inspector面板中 点击 [Add Component]按钮 添加 Vn Actor Animator 组件。可以在 搜索框 中进行搜索。
+  - Vn Actor Animator 组件的 Spine Animator Base 通常会自动获取。
+    - 自动获取失败时，需要手动指定。把 Hierarchy面板中的 Spine GameObject (图示中命名为SP_Role_Test_1) ，鼠标拖拽到 Vn Actor Animator 组件的 Spine Animator Base 栏中，作为 基础的Spine动画对象 进行使用。
 
 ## 特效的导入
 
@@ -464,7 +464,7 @@
 
 - 在 多语言文本表中，添加一个 提示消息的 多语言文本条目。
   - 打开 多语言文本表 的编辑器窗口。
-    - 在 Project面板中，选中 VNStoryManager 预制体。
+    - 在 Project面板中，选中 VnStoryManager 预制体。
     - 在 Inspector面板中，找到 Text Table条目，点击右侧 已经配置的 多语言文本表，就能快速选中 多语言文本表 的资源文件。
     - 双击 Project面板 中选中的 多语言文本表 资源文件，打开 多语言文本表 的编辑器窗口。
   - 添加 一个新的 多语言文本条目。
@@ -694,7 +694,7 @@
 剧情演出系统的UI样式，可以根据美术设计的需求，进行自定义的修改。
 ![alt text](image-49.png)
 
-- 在 Project面板中，选中 VNStoryManager预制体。
+- 在 Project面板中，选中 VnStoryManager预制体。
   - 在右侧的 Inspector面板中，找到 Dialogue System Controller组件。
   - 找到 Dialogue UI 条目，点击右侧 当前的 UI预制体，就可以在 Project面板中 定位到 当前的 UI预制体了。
 - 建议复制 当前的 UI预制体，创建一个新的 UI预制体。

@@ -1,4 +1,4 @@
-# VNStoryManager 剧情演出系统
+# VnStoryManager 剧情演出系统
 
 此插件，是基于 Dialogue System，开发了 视觉小说(Visual Novel) 相关的各项功能。\
 例如，背景的切换、角色的切换与位置、大小的设定、Spine动画的支持 。
@@ -22,4 +22,4 @@
 
 # 使用文档
 
-- [VNStoryManager 使用文档](Docs~/VNStoryManager/VNStoryManager.md)
+- [VnStoryManager 使用文档](Docs~/VnStoryManager/VnStoryManager.md)

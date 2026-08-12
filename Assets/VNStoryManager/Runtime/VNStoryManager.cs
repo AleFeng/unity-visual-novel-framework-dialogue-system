@@ -36,7 +36,7 @@ namespace PixelCrushers.DialogueSystem.VnStoryFramework
     }
     
     /// <summary>
-    /// VN故事系统 管理器组件。
+    /// Vn故事系统 管理器组件。
     /// </summary>
     public class VnStoryManager : ToolkitMonoSingleton<VnStoryManager>
     {
@@ -83,10 +83,10 @@ namespace PixelCrushers.DialogueSystem.VnStoryFramework
         }
         
         #region 流程控制
-        private bool _isVnStoryStarted; // VN故事系统 是否已经开始
+        private bool _isVnStoryStarted; // Vn故事系统 是否已经开始
         
         /// <summary>
-        /// 开始 VN故事系统
+        /// 开始 Vn故事系统
         /// </summary>
         public void StartVnStory(string conversationName = null)
         {
@@ -106,7 +106,7 @@ namespace PixelCrushers.DialogueSystem.VnStoryFramework
         }
         
         /// <summary>
-        /// 停止 VN故事系统
+        /// 停止 Vn故事系统
         /// </summary>
         /// <param name="clearAllData">清除 所有数据</param>
         public void StopVnStory(bool clearAllData = true)
