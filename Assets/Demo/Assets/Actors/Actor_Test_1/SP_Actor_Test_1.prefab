@@ -52,9 +52,7 @@ MonoBehaviour:
   m_ActorRotateEase: 3
   m_ActorScaleSpeed: 1.5
   m_ActorScaleEase: 3
-  m_SpineAnimator: {fileID: 7663239551767054037}
-  m_StateInitList:
-  - idle
+  m_ActorAnimator: {fileID: 7663239551767054037}
   m_ParticleSystemRoot: {fileID: 0}
 --- !u!1 &5003314378017644441
 GameObject:
@@ -203,16 +201,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 886f5bb9b502ab545bfb14229d650da6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp-firstpass::Fs.GameFramework.Gameplay.AnimSimulatorSystem.SpineAnimator
-  spineSkeletonAnimation: {fileID: 5133280223776683305}
-  spineAnimSwitchSpineDuration: 0.2
+  animFadeDuration: 0.2
   isDisplayOnInit: 0
-  spineStateInitList:
+  stateInitList:
   - idle
+  baseSkins: []
+  spineSkeletonAnimation: {fileID: 5133280223776683305}
   spineStateData:
   - stateName: idle
     spineSkeletonAnimation: {fileID: 0}
     spineAnimDatas:
-    - animRefAsset: {fileID: 11400000, guid: 64b6ec6b4c06fcf4daec1bf36b8a5241, type: 2}
+    - animName: A_Body_Idle
       animTrack: 1
       animTrackSub: 0
       isLoop: 1
@@ -220,7 +219,7 @@ MonoBehaviour:
       speed: 1
       startDelayTime: 0
       loopIntervalTimeRange: {x: 0, y: 0}
-    - animRefAsset: {fileID: 11400000, guid: 679b6449d8df30d40b418b7085c251f7, type: 2}
+    - animName: A_Body_Pose_Idle
       animTrack: 900
       animTrackSub: 0
       isLoop: 0
@@ -228,7 +227,7 @@ MonoBehaviour:
       speed: 1
       startDelayTime: 0
       loopIntervalTimeRange: {x: 0, y: 0}
-    - animRefAsset: {fileID: 11400000, guid: f4d3e0814f5bc0f4c8f9d21ffdc52175, type: 2}
+    - animName: A_Ear_L_Twitch
       animTrack: 8
       animTrackSub: 0
       isLoop: 1
@@ -236,7 +235,7 @@ MonoBehaviour:
       speed: 1
       startDelayTime: 0
       loopIntervalTimeRange: {x: 0, y: 7}
-    - animRefAsset: {fileID: 11400000, guid: 7b90748e16c39b9419fc4aad397b9df4, type: 2}
+    - animName: A_Ear_R_Twitch
       animTrack: 8
       animTrackSub: 1
       isLoop: 1
@@ -247,7 +246,7 @@ MonoBehaviour:
   - stateName: akimbo
     spineSkeletonAnimation: {fileID: 0}
     spineAnimDatas:
-    - animRefAsset: {fileID: 11400000, guid: 64b6ec6b4c06fcf4daec1bf36b8a5241, type: 2}
+    - animName: A_Body_Idle
       animTrack: 1
       animTrackSub: 0
       isLoop: 1
@@ -255,7 +254,7 @@ MonoBehaviour:
       speed: 1
       startDelayTime: 0
       loopIntervalTimeRange: {x: 0, y: 0}
-    - animRefAsset: {fileID: 11400000, guid: eda60c4bd1ea79046ac1a8dffbe06583, type: 2}
+    - animName: A_Body_Pose_Akimbo
       animTrack: 900
       animTrackSub: 0
       isLoop: 0
@@ -263,7 +262,7 @@ MonoBehaviour:
       speed: 1
       startDelayTime: 0
       loopIntervalTimeRange: {x: 0, y: 0}
-    - animRefAsset: {fileID: 11400000, guid: f4d3e0814f5bc0f4c8f9d21ffdc52175, type: 2}
+    - animName: A_Ear_L_Twitch
       animTrack: 8
       animTrackSub: 0
       isLoop: 1
@@ -271,7 +270,7 @@ MonoBehaviour:
       speed: 1
       startDelayTime: 0
       loopIntervalTimeRange: {x: 0, y: 7}
-    - animRefAsset: {fileID: 11400000, guid: 7b90748e16c39b9419fc4aad397b9df4, type: 2}
+    - animName: A_Ear_R_Twitch
       animTrack: 8
       animTrackSub: 1
       isLoop: 1
@@ -282,7 +281,7 @@ MonoBehaviour:
   - stateName: face_amaze
     spineSkeletonAnimation: {fileID: 0}
     spineAnimDatas:
-    - animRefAsset: {fileID: 11400000, guid: a03a65dbf36e6a84293238a8c65c166f, type: 2}
+    - animName: A_Face_Amaze
       animTrack: 3
       animTrackSub: 0
       isLoop: 1
@@ -293,7 +292,7 @@ MonoBehaviour:
   - stateName: face_anger
     spineSkeletonAnimation: {fileID: 0}
     spineAnimDatas:
-    - animRefAsset: {fileID: 11400000, guid: 107d929453ef8e04a9260fcae01b526d, type: 2}
+    - animName: A_Face_Anger
       animTrack: 3
       animTrackSub: 0
       isLoop: 1
@@ -304,7 +303,7 @@ MonoBehaviour:
   - stateName: face_happy
     spineSkeletonAnimation: {fileID: 0}
     spineAnimDatas:
-    - animRefAsset: {fileID: 11400000, guid: feda7b64c642fe941a7a42102bc24909, type: 2}
+    - animName: A_Face_Happy
       animTrack: 3
       animTrackSub: 0
       isLoop: 1
@@ -315,7 +314,7 @@ MonoBehaviour:
   - stateName: face_idle
     spineSkeletonAnimation: {fileID: 0}
     spineAnimDatas:
-    - animRefAsset: {fileID: 11400000, guid: 15c0ccb8c3b97774e919a4b4d79dd163, type: 2}
+    - animName: A_Face_Idle
       animTrack: 3
       animTrackSub: 0
       isLoop: 1
@@ -326,7 +325,7 @@ MonoBehaviour:
   - stateName: face_sad
     spineSkeletonAnimation: {fileID: 0}
     spineAnimDatas:
-    - animRefAsset: {fileID: 11400000, guid: 2adebeb59c3894341a81b4970c40bf54, type: 2}
+    - animName: A_Face_Sad
       animTrack: 3
       animTrackSub: 0
       isLoop: 1
@@ -337,7 +336,7 @@ MonoBehaviour:
   - stateName: face_shy
     spineSkeletonAnimation: {fileID: 0}
     spineAnimDatas:
-    - animRefAsset: {fileID: 11400000, guid: a5de6faf339dc9943af6a3f7c94e8d6f, type: 2}
+    - animName: A_Face_Shy
       animTrack: 3
       animTrackSub: 0
       isLoop: 1
@@ -348,7 +347,7 @@ MonoBehaviour:
   - stateName: face_think
     spineSkeletonAnimation: {fileID: 0}
     spineAnimDatas:
-    - animRefAsset: {fileID: 11400000, guid: 701b5a3cc7c49e24ba3e06296542ed82, type: 2}
+    - animName: A_Face_Think
       animTrack: 3
       animTrackSub: 0
       isLoop: 1
@@ -356,4 +355,3 @@ MonoBehaviour:
       speed: 1
       startDelayTime: 0
       loopIntervalTimeRange: {x: 0, y: 0}
-  baseSkins: []
