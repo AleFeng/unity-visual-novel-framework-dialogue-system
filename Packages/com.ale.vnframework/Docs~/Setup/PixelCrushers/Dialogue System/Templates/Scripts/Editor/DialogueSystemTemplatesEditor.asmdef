@@ -1,0 +1,21 @@
+{
+    "name": "DialogueSystemTemplatesEditor",
+    "rootNamespace": "",
+    "references": [
+        "DialogueSystem",
+        "PixelCrushers",
+        "PixelCrushersEditor",
+        "DialogueSystemEditor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
