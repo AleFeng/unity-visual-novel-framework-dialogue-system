@@ -18,7 +18,7 @@
   - [背景图片的导入](#背景图片的导入)
   - [角色头像图片的导入](#角色头像图片的导入)
   - [角色的导入](#角色的导入)
-    - [「Spine动画预制体」](#spine动画预制体)
+    - [「角色动画预制体」](#角色动画预制体)
   - [特效的导入](#特效的导入)
   - [音频的导入](#音频的导入)
   - [富文本图标的导入](#富文本图标的导入)
@@ -68,7 +68,7 @@
 # 示例场景
 
 在示例场景中，演示了所有 剧情演出的功能。可以参考示例场景，来完成各类功能的配置。
-例如，背景切换；场景角色设定、位置、旋转、缩放；Spine动画、动作与表情的切换；
+例如，背景切换；场景角色设定、位置、旋转、缩放；角色动画、动作与表情的切换；
 场景特效；富文本效果、表情图标；文本打字机效果、停顿、速度控制；
 音频配置、背景音乐、环境音、特效音、语音；
 
@@ -252,7 +252,7 @@
 
 # 资源导入
 
-在 剧情演出 中使用的各类 美术资源、通常有 图片、音频、Spine动画、预制体 等。\
+在 剧情演出 中使用的各类 美术资源、通常有 图片、音频、角色动画(Spine / Live2D / Unity动画)、预制体 等。\
 具体的导入方法与流程，可以参考 [资源导入文档](../../../../Fs/Runtime/GameFramework/Common/Systems/AssetSystem/Docs~/AssetImport/AssetImport.md)。
 
 ## 背景图片的导入
@@ -271,15 +271,19 @@
 
 ## 角色的导入
 
-### 「Spine动画预制体」
+### 「角色动画预制体」
 
 ![alt text](image-55.png)
 
 - 添加 Vn Actor Animator 组件。
   - 鼠标单击 选中 Hierarchy面板中的 预制体的根物体。
   - 在 Inspector面板中 点击 [Add Component]按钮 添加 Vn Actor Animator 组件。可以在 搜索框 中进行搜索。
-  - Vn Actor Animator 组件的 Spine Animator Base 通常会自动获取。
-    - 自动获取失败时，需要手动指定。把 Hierarchy面板中的 Spine GameObject (图示中命名为SP_Role_Test_1) ，鼠标拖拽到 Vn Actor Animator 组件的 Spine Animator Base 栏中，作为 基础的Spine动画对象 进行使用。
+  - Vn Actor Animator 组件的 Actor Animator 栏 通常会自动获取（自身 ➡️ 子物体 ➡️ 父级 ➡️ 兄弟分支 逐级查找，含未激活的对象）。
+    - 该栏的类型是**后端无关**的 Animator Base，挂 Spine Animator、Live2D Animator 或 Unity Animator 都可以，Vn Actor Animator 不关心具体是哪一种。
+    - 自动获取失败时，需要手动指定。把 Hierarchy面板中 挂着动画组件的 GameObject (图示中命名为SP_Role_Test_1) ，鼠标拖拽到 Vn Actor Animator 组件的 Actor Animator 栏中。
+  - 角色的**初始状态**配置在动画组件（Spine Animator 等）的 State Init List 栏上，不在 Vn Actor Animator 上。剧情节点若填写了 `Actor{N}Anim` 字段，会以该字段的值为准。
+
+> ⚠️ 上方截图是早期版本，其中的「Spine Animator Base」栏现已更名为 **「Actor Animator」**、类型也由 Spine 专有改为后端无关的 Animator Base。以文字说明为准。
 
 ## 特效的导入
 
@@ -511,7 +515,7 @@
 ## 场景的角色
 
 配置场景中的角色。设置角色的 位置、旋转、缩放、动画。\
-实现简单的 位置移动、旋转、缩放变化的动画效果，并播放美术制作的 2D动画(Spine动画)。
+实现简单的 位置移动、旋转、缩放变化的动画效果，并播放美术制作的 2D动画(Spine / Live2D / Unity动画均可)。
 ![alt text](image-35.png)
 
 - 配置 当前场景的 出场角色。
@@ -562,7 +566,7 @@
 ## 场景的特效
 
 配置场景中的特效。设置特效的 位置、旋转、缩放、动画。
-实现简单的 位置移动、旋转、缩放变化的动画效果，并播放美术制作的 2D动画(Spine动画)。
+实现简单的 位置移动、旋转、缩放变化的动画效果，并播放美术制作的 2D动画(Spine / Live2D / Unity动画均可)。
 ![alt text](image-37.png)
 
 - 配置方式与 [场景的角色](#场景的角色) 相同，这里仅列出 字段条目 的名称。
