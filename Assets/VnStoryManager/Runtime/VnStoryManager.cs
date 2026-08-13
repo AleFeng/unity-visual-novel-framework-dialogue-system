@@ -1240,8 +1240,33 @@ namespace PixelCrushers.DialogueSystem.VnStoryFramework
             // 无 VnActorAnimator 的普通预制体：自己销毁实例并卸载资源。
             // 此前这里是 ActorAnimator?.ExecuteDestroy(...)，组件缺失时整条链被跳过
             // ——实例永不销毁、UnloadAsset 永不调用（Addressable 句柄泄漏），却已经从映射表里摘掉了。
-            if (actorPrefabLoadData.PrefabInstance) Destroy(actorPrefabLoadData.PrefabInstance);
-            UnloadAsset(assetAddress);
+            var instance = actorPrefabLoadData.PrefabInstance;
+
+            // 实例已不在或未激活：直接销毁，没有在途表现要收尾
+            if (!instance || !instance.activeSelf)
+            {
+                if (instance) Destroy(instance);
+                UnloadAsset(assetAddress);
+                return;
+            }
+
+            // 与 VnActorAnimator.ExecuteDestroy 同一套收尾：先停粒子发射，等在途粒子自然播完再销毁。
+            // 「直接做一个自动播放的粒子特效预制体」是受支持的用法，不能因为它没挂组件就被拦腰截断。
+            if (!VnActorAnimator.StopParticlesAndGetDelay(instance, out var delayParticle))
+            {
+                // 没有粒子系统（例如纯图片预制体）：无需等待
+                Destroy(instance);
+                UnloadAsset(assetAddress);
+                return;
+            }
+
+            // 刻意不传 owner：要销毁的正是这个实例，绑定生命周期会让回调随对象一起被丢弃，
+            // 而 UnloadAsset 靠这个回调执行。与 VnActorAnimator.ExecuteDestroy 的取舍一致。
+            ToolkitTween.DelayedCall(delayParticle, () =>
+            {
+                if (instance) Destroy(instance);
+                UnloadAsset(assetAddress);
+            }, unscaled: false);
         }
         #endregion
         

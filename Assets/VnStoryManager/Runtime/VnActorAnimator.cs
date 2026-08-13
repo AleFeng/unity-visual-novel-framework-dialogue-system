@@ -583,27 +583,47 @@ namespace PixelCrushers.DialogueSystem.VnStoryFramework
         [SerializeField] private ParticleSystem m_ParticleSystemRoot;
         
         /// <summary>
-        /// 销毁 粒子系统
+        /// 销毁 粒子系统：停止发射并给出等待时长。作用于本组件指定的粒子根节点。
         /// </summary>
-        /// <param name="delay"></param>
-        /// <returns></returns>
+        /// <param name="delay">需要等待的时长（秒）。返回 false 时为 -1。</param>
+        /// <returns>是否存在粒子系统。</returns>
         private bool DestroyParticleSystem(out float delay)
         {
             delay = -1f;
             if (m_ParticleSystemRoot == null) return false;
-            
-            // 停止 粒子系统 发射新粒子
-            m_ParticleSystemRoot.Stop();
-            // 延迟时间 为粒子系统中 所有粒子的最大存活时间
-            // 包括子物体上的 粒子系统
+
+            return StopParticlesAndGetDelay(m_ParticleSystemRoot.gameObject, out delay);
+        }
+
+        /// <summary>
+        /// 停止 <paramref name="root"/> 子树内全部粒子系统的发射，并给出「已发射的粒子自然播完」所需的等待时长。
+        ///
+        /// <para>提为静态是因为<b>没有挂 <see cref="VnActorAnimator"/> 的预制体也需要这套收尾</b>——
+        /// 剧情演出里「直接做一个自动播放的粒子特效预制体」是受支持的用法，
+        /// 销毁它时同样不能把在途粒子拦腰截断。<c>VnStoryManager</c> 的降级销毁路径调用的就是本方法。</para>
+        /// </summary>
+        /// <param name="root">要扫描的根物体。本组件传粒子根节点，无组件时由外部传整个实例。</param>
+        /// <param name="delay">需要等待的时长（秒）。返回 false 时为 -1。</param>
+        /// <returns>子树内是否存在（激活的）粒子系统。</returns>
+        internal static bool StopParticlesAndGetDelay(GameObject root, out float delay)
+        {
+            delay = -1f;
+            if (!root) return false;
+
+            // 只取激活的：未激活的粒子系统本就没在发射，把它的存活期计进等待时长只会平白拖长销毁
+            var particleSystems = root.GetComponentsInChildren<ParticleSystem>();
+            if (particleSystems.Length == 0) return false;
+
+            // 延迟时间 为粒子系统中 所有粒子的最大存活时间，包括子物体上的粒子系统
             float maxLifetime = 0f;
-            var particleSystems = m_ParticleSystemRoot.GetComponentsInChildren<ParticleSystem>();
             foreach (var ps in particleSystems)
             {
+                // 只停发射、不清除已有粒子，让它们自然播完
+                ps.Stop(true, ParticleSystemStopBehavior.StopEmitting);
                 maxLifetime = Mathf.Max(maxLifetime, ps.main.startLifetime.constantMax);
             }
             delay = maxLifetime;
-            
+
             return true;
         }
         #endregion
