@@ -1,0 +1,21 @@
+{
+    "name": "Ale.VnFramework",
+    "rootNamespace": "Ale.VnFramework",
+    "references": [
+        "PixelCrushers",
+        "DialogueSystem",
+        "Ale.Toolkit.Runtime",
+        "Ale.AnimSimulatorSystem",
+        "Unity.TextMeshPro",
+        "Unity.Localization"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
