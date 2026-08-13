@@ -15,8 +15,8 @@ MonoBehaviour:
   m_GroupName: Default Local Group
   m_GUID: 4cb6cf93132da024092bfb87f0481870
   m_SerializeEntries:
-  - m_GUID: 148662bf9aecfd74288e016fd4574d7f
-    m_Address: Assets/Demo
+  - m_GUID: 081bae073866ac34ba457c47e2d15e23
+    m_Address: Assets/Samples/Ale VN Framework
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
