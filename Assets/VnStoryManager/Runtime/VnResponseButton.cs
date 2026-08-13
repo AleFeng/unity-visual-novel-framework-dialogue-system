@@ -1,12 +1,13 @@
 using UnityEngine;
 using UnityEngine.UI;
 using Ale.Toolkit.Runtime;
+using PixelCrushers.DialogueSystem;
 
 #if HAS_TMPRO
 using TMPro;
 #endif
 
-namespace PixelCrushers.DialogueSystem.VnStoryFramework
+namespace Ale.VnFramework
 {
     /// <summary>
     /// 选项按钮。

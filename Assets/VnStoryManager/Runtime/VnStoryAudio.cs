@@ -4,7 +4,7 @@ using UnityEngine;
 using Fs.GameFramework.Common.AudioSystem;
 #endif
 
-namespace PixelCrushers.DialogueSystem.VnStoryFramework
+namespace Ale.VnFramework
 {
     /// <summary>
     /// VN 剧情演出的音频接缝。

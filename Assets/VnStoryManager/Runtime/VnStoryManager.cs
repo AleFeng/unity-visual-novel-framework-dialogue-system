@@ -4,13 +4,15 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using Ale.Toolkit.Runtime;
+using PixelCrushers;
+using PixelCrushers.DialogueSystem;
 
 #if HAS_LOCALIZATION
 using UnityEngine.Localization;
 using UnityEngine.Localization.Settings;
 #endif
 
-namespace PixelCrushers.DialogueSystem.VnStoryFramework
+namespace Ale.VnFramework
 {
     /// <summary>
     /// 角色预制体加载数据。
