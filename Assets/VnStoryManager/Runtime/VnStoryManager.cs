@@ -1164,23 +1164,24 @@ namespace PixelCrushers.DialogueSystem.VnStoryFramework
                     return;
                 }
                 
-                // 获取角色Spine动画组件
-                var actorAnimator = actorPrefab.GetComponent<VnActorAnimator>();
-                if (!actorAnimator)
-                {
-                    Debug.LogWarning($"剧情演出 >> Actor预制体 '{actorAssetPrefab}' 中未找到 SkeletonAnimation 组件。请检查预制体设置。");
-                }
-                
                 // 实例化角色预制体
                 var actorPrefabInstance = Instantiate(actorPrefab, this.transform);
-                actorPrefabInstance.SetActive(false); // 设置非激活。等待组件初始化时激活
+                actorPrefabInstance.SetActive(false); // 设置非激活。等待 InitActorPrefab 激活（延时加载期间也靠它把实例藏住）
+
+                // 获取 角色动画组件。缺失是受支持的降级形态（纯粒子特效即是）——位姿、激活与销毁照常走，
+                // 只是没有淡入淡出与动画状态，故用 Log 而非 Warning。
+                // 只在实例上取一次：此前预制体资产与实例上各取了一次，前一次的结果只用来判空。
+                var actorAnimator = actorPrefabInstance.GetComponent<VnActorAnimator>();
+                if (!actorAnimator)
+                    Debug.Log($"剧情演出 >> Actor预制体 '{actorAssetPrefab}' 未挂载 VnActorAnimator，按普通预制体处理（无淡入淡出与动画状态）。");
+
                 // 记录 角色预制体
                 var actorAnimsLoadData = new FActorPrefabLoadData
                 {
                     AssetAddress = actorAssetPrefabAddress,
                     PrefabAsset = actorPrefab,
                     PrefabInstance = actorPrefabInstance,
-                    ActorAnimator = actorPrefabInstance.GetComponent<VnActorAnimator>()
+                    ActorAnimator = actorAnimator
                 };
                 _mapActorAnimator[actorFieldTitleName] = actorAnimsLoadData;
                 
@@ -1217,18 +1218,30 @@ namespace PixelCrushers.DialogueSystem.VnStoryFramework
         /// <param name="actorFieldTitleName">角色 字段标题</param>
         private void UnloadActorPrefab(string actorFieldTitleName)
         {
-            if (_mapActorAnimator.TryGetValue(actorFieldTitleName, out var actorPrefabLoadData))
+            if (!_mapActorAnimator.TryGetValue(actorFieldTitleName, out var actorPrefabLoadData)) return;
+
+            // 先从映射表移除：下面的销毁可能带延时，期间不应再被淡入淡出等全表遍历扫到
+            _mapActorAnimator.Remove(actorFieldTitleName);
+
+            // 提出到局部变量：闭包捕获结构体字段会把整个结构体一起装进闭包类
+            var assetAddress = actorPrefabLoadData.AssetAddress;
+
+            if (actorPrefabLoadData.ActorAnimator)
             {
-                // 销毁 角色预制体的实例
-                // 延迟激活的Actor未被激活，会直接销毁。
-                actorPrefabLoadData.ActorAnimator?.ExecuteDestroy(() =>
+                // 销毁 角色预制体的实例。延迟激活、尚未激活的会直接销毁。
+                actorPrefabLoadData.ActorAnimator.ExecuteDestroy(() =>
                 {
                     // 卸载 角色预制体资源
-                    UnloadAsset(actorPrefabLoadData.AssetAddress);
+                    UnloadAsset(assetAddress);
                 });
-                // 从映射表中移除
-                _mapActorAnimator.Remove(actorFieldTitleName);
+                return;
             }
+
+            // 无 VnActorAnimator 的普通预制体：自己销毁实例并卸载资源。
+            // 此前这里是 ActorAnimator?.ExecuteDestroy(...)，组件缺失时整条链被跳过
+            // ——实例永不销毁、UnloadAsset 永不调用（Addressable 句柄泄漏），却已经从映射表里摘掉了。
+            if (actorPrefabLoadData.PrefabInstance) Destroy(actorPrefabLoadData.PrefabInstance);
+            UnloadAsset(assetAddress);
         }
         #endregion
         
@@ -1250,22 +1263,38 @@ namespace PixelCrushers.DialogueSystem.VnStoryFramework
             string actorAnimParam
         )
         {
-            // 设置 角色预制体 实例的位置、缩放、动画
+            if (!actorPrefabLoadData.PrefabInstance) return;
+
+            // 获取 角色预制体 实例的 Transform
+            var actorTrans = actorPrefabLoadData.PrefabInstance.transform;
+
+            // 角色位置、旋转、缩放。默认 为 预制体 当前值
+            ParseVector3AndFloat(actorPosParam, out var toPos, out var _, actorTrans.position);
+            ParseVector3AndFloat(actorRotateParam, out var toRot, out var _, actorTrans.rotation.eulerAngles);
+            ParseVector3AndFloat(actorScaleParam, out var toScale, out var _, actorTrans.localScale);
+            // 角色动画组。字段缺失（null）时传 null，表示沿用预制体自身配置的初始状态；
+            // 字段存在但为空时传空数组，表示明确不进入任何状态。判据与 SetActorPrefab 一致
+            // ——ParseStringArray 对两者都返回空数组，不看原串就区分不出来。
+            ParseStringArray(actorAnimParam, out var toStateArray);
+
             if (actorPrefabLoadData.ActorAnimator)
             {
-                // 获取 角色预制体 实例的 Transform
-                var actorTrans = actorPrefabLoadData.PrefabInstance.transform;
-                
-                // 角色位置。默认 为 预制体 当前位置
-                ParseVector3AndFloat(actorPosParam, out var toPos, out var _, actorTrans.position);
-                ParseVector3AndFloat(actorRotateParam, out var toRot, out var _, actorTrans.rotation.eulerAngles);
-                ParseVector3AndFloat(actorScaleParam, out var toScale, out var _, actorTrans.localScale);
-                ParseStringArray(actorAnimParam, out var toStateArray);
-                
-                // 初始化 位置、缩放、动画
-                actorPrefabLoadData.PrefabInstance.SetActive(false); // 先禁用，等待后续启用
-                actorPrefabLoadData.ActorAnimator.ExecuteInit(toPos, toRot, toScale, toStateArray);
+                // 交给动画组件：它会落位、激活，并在动画播放器就绪后淡入与切换状态
+                actorPrefabLoadData.ActorAnimator.ExecuteInit(
+                    toPos, toRot, toScale, actorAnimParam == null ? null : toStateArray);
+                return;
             }
+
+            // 无 VnActorAnimator 的普通预制体（如纯粒子特效）：自己落位并激活。
+            // 与 FadeIn/FadeOutActorsAndEffects 的降级分支同一套判据。
+            // 此前这整段都包在组件判空里，而实例在 LoadActorPrefab 中被 SetActive(false)，
+            // 于是缺组件的预制体加载后没有任何代码把它激活回来——两个 Demo 特效正是这种。
+            // 先禁用再落位再激活：让粒子等由 OnEnable 驱动的组件从头开始，也保证不会在旧位置上被渲染一帧。
+            if (actorPrefabLoadData.PrefabInstance.activeSelf)
+                actorPrefabLoadData.PrefabInstance.SetActive(false);
+            actorTrans.SetPositionAndRotation(toPos, Quaternion.Euler(toRot));
+            actorTrans.localScale = toScale;
+            actorPrefabLoadData.PrefabInstance.SetActive(true);
         }
         
         /// <summary>
@@ -1285,14 +1314,17 @@ namespace PixelCrushers.DialogueSystem.VnStoryFramework
             string actorAnimParam
         )
         {
+            if (!actorPrefabLoadData.PrefabInstance) return;
+
+            // 获取 角色预制体 实例的 Transform
+            var actorTrans = actorPrefabLoadData.PrefabInstance.transform;
+
             // 设置 角色预制体 实例的位置、缩放、动画
             if (actorPrefabLoadData.ActorAnimator)
             {
                 // 完成之前的 位置、缩放 插值动画
                 actorPrefabLoadData.ActorAnimator.CompleteTransformTween();
-                
-                // 获取 角色预制体 实例的 Transform
-                var actorTrans = actorPrefabLoadData.PrefabInstance.transform;
+
                 // 角色位置。默认 为 预制体 当前位置
                 if (actorPosParam != null)
                 {
@@ -1314,7 +1346,7 @@ namespace PixelCrushers.DialogueSystem.VnStoryFramework
                     ParseVector3AndFloat(actorScaleParam, out var toScale, out var scaleSpeed, actorTrans.localScale, 1f);
                     actorPrefabLoadData.ActorAnimator.SetToScale(toScale, scaleSpeed);
                 }
-                
+
                 // 角色动画组
                 if (actorAnimParam != null)
                 {
@@ -1322,7 +1354,31 @@ namespace PixelCrushers.DialogueSystem.VnStoryFramework
                     ParseStringArray(actorAnimParam, out var toStateArray);
                     actorPrefabLoadData.ActorAnimator.SwitchStateArray(toStateArray);
                 }
+                return;
             }
+
+            // 无 VnActorAnimator 的普通预制体：没有补间能力，直接瞬置（参数里的速度倍率对它无意义）。
+            // 这条路不是边角——对话行只要没写 ActorNPrefab 字段，就会走到 SetActorPrefab
+            // （Field.LookupValue 对缺失字段返回 null，`== ""` 判定为假），
+            // 即「保留该槽位的角色、只改位姿」正是最常见的写法。
+            if (!actorPrefabLoadData.PrefabInstance.activeSelf)
+                actorPrefabLoadData.PrefabInstance.SetActive(true);
+            if (actorPosParam != null)
+            {
+                ParseVector3AndFloat(actorPosParam, out var toPos, out var _, actorTrans.position, 1f);
+                actorTrans.position = toPos;
+            }
+            if (actorRotateParam != null)
+            {
+                ParseVector3AndFloat(actorRotateParam, out var toRot, out var _, actorTrans.rotation.eulerAngles, 1f);
+                actorTrans.eulerAngles = toRot;
+            }
+            if (actorScaleParam != null)
+            {
+                ParseVector3AndFloat(actorScaleParam, out var toScale, out var _, actorTrans.localScale, 1f);
+                actorTrans.localScale = toScale;
+            }
+            // 角色动画组：无动画播放器，忽略
         }
         #endregion
         
