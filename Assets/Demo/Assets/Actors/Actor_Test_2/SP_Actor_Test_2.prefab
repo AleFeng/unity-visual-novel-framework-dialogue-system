@@ -52,9 +52,7 @@ MonoBehaviour:
   m_ActorRotateEase: 3
   m_ActorScaleSpeed: 1.5
   m_ActorScaleEase: 3
-  m_SpineAnimator: {fileID: 8447715501771351812}
-  m_StateInitList:
-  - idle
+  m_ActorAnimator: {fileID: 8447715501771351812}
   m_ParticleSystemRoot: {fileID: 0}
 --- !u!1 &3155472536230378605
 GameObject:
@@ -203,10 +201,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 886f5bb9b502ab545bfb14229d650da6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp-firstpass::Fs.GameFramework.Gameplay.AnimSimulatorSystem.SpineAnimator
-  spineSkeletonAnimation: {fileID: 9147720412524284821}
-  spineAnimSwitchSpineDuration: 0.2
+  animFadeDuration: 0.2
   isDisplayOnInit: 0
-  spineStateInitList:
+  stateInitList:
   - idle
-  spineStateData: []
   baseSkins: []
+  spineSkeletonAnimation: {fileID: 9147720412524284821}
+  spineStateData: []
