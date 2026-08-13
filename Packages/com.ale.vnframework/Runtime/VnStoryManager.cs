@@ -571,7 +571,7 @@ namespace Ale.VnFramework
         [Header("对话-头像切换")]
 #if ATK_ADDRESSABLE
         [Tooltip("对话-头像切换 文件夹路径")]
-        [SerializeField] private string dialogueHeadAddressableFolder = "Assets/Demo/Assets/ActorsHead/";
+        [SerializeField] private string dialogueHeadAddressableFolder = "Assets/Samples/Ale VN Framework/1.0.0/VN Framework Demo/Assets/ActorsHead/";
         [Tooltip("对话-头像切换 扩展名。通常为PNG格式")]
         [SerializeField] private string dialogueHeadExtension = ".png";
 #endif
@@ -681,7 +681,7 @@ namespace Ale.VnFramework
         
 #if ATK_ADDRESSABLE
         [Tooltip("背景资产的文件夹路径")]
-        [SerializeField] private string backgroundAddressableFolder = "Assets/Demo/Assets/Backgrounds/";
+        [SerializeField] private string backgroundAddressableFolder = "Assets/Samples/Ale VN Framework/1.0.0/VN Framework Demo/Assets/Backgrounds/";
         [Tooltip("背景资产的扩展名。建议使用jpg以节省空间")]
         [SerializeField] private string backgroundAddressableExtension = ".jpg";
 #endif
@@ -992,7 +992,7 @@ namespace Ale.VnFramework
         [Header("角色")]
 #if ATK_ADDRESSABLE
         [Tooltip("角色资产 的文件夹路径")]
-        [SerializeField] private string actorAddressableFolder = "Assets/Demo/Assets/Actors/";
+        [SerializeField] private string actorAddressableFolder = "Assets/Samples/Ale VN Framework/1.0.0/VN Framework Demo/Assets/Actors/";
         [Tooltip("角色资产 的扩展名。一般使用Prefab")]
         [SerializeField] private string actorAddressableExtension = ".prefab";
 #endif
@@ -1472,7 +1472,7 @@ namespace Ale.VnFramework
         [Header("场景特效")]
 #if ATK_ADDRESSABLE
         [Tooltip("场景特效的 文件夹路径")]
-        [SerializeField] private string effectAddressableFolder = "Assets/Demo/Assets/Effects/";
+        [SerializeField] private string effectAddressableFolder = "Assets/Samples/Ale VN Framework/1.0.0/VN Framework Demo/Assets/Effects/";
         [Tooltip("场景特效的 扩展名。一般使用Prefab")]
         [SerializeField] private string effectAddressableExtension = ".prefab";
 #endif

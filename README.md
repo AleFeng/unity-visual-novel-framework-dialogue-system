@@ -148,8 +148,11 @@ https://github.com/AleFeng/unity-visual-novel-framework-dialogue-system.git?path
 （剧情库 `StoryDatabase` + 管理器与播放器预制体 + Spine 角色与特效资源 + 对话 UI + 示例场景），
 可直接进 Play 体验完整演出流程。
 
-> 样例导入后会落到 `Assets/Samples/Ale VN Framework/1.0.0/Demo/`，而 `VnStoryManager` 上的四个资源
-> 文件夹路径默认写死指向 `Assets/Demo/…`，需要手工订正为样例的实际路径。
+> 样例会落到 `Assets/Samples/Ale VN Framework/1.0.0/VN Framework Demo/`，`VnStoryManager` 上的四个资源
+> 文件夹路径默认值已指向该路径，**导入后无需订正**。
+>
+> ⚠️ 启用了 `ATK_ADDRESSABLE` 时，还需要把导入后的样例文件夹（或其任一上级目录）拖进 Addressables 分组，
+> 否则资源加载不到——地址即完整资产路径，与上述前缀一致。未启用该宏时资源改由 `Resources` 解析。
 
 ### 其他方式
 也可以下载仓库，把 `Packages/com.ale.vnframework` 整个文件夹拷进你项目的 **`Packages/` 目录**
@@ -272,7 +275,7 @@ Packages/com.ale.vnframework/        ← 包根
 ├── Docs~/                       Unity 不导入（~ 后缀）
 │   ├── Setup/PixelCrushers/     ⚠ Dialogue System 的 asmdef 副本与说明
 │   └── VnStoryManager/          使用文档与截图
-└── Samples~/Demo/               演示 Sample（剧情库 + 预制体 + Spine 角色 + 特效 + UI + 场景）
+└── Samples~/VN Framework Demo/  演示 Sample（剧情库 + 预制体 + Spine 角色 + 特效 + UI + 场景）
 ```
 
 ## 📋 待办事项

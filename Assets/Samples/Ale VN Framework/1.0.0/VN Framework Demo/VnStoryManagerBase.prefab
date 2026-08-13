@@ -353,17 +353,17 @@ MonoBehaviour:
   conversationResponseButtonVariableIsReadFieldTitle: ConversationResponseButtonVariableIsRead
   dialogueTypewriterSpeedFieldTitle: DialogueTypewriterSpeed
   dialogueTypewriterPerSecond: 10
-  dialogueHeadAddressableFolder: Assets/Demo/Assets/ActorsHead/
+  dialogueHeadAddressableFolder: Assets/Samples/Ale VN Framework/1.0.0/VN Framework Demo/Assets/ActorsHead/
   dialogueHeadExtension: .png
   dialogueHeadFieldTitle: DialogueHead
   srBackgroundCurrent: {fileID: 3949102267733036111}
   srBackgroundLast: {fileID: 701117378272908449}
-  backgroundAddressableFolder: Assets/Demo/Assets/Backgrounds/
+  backgroundAddressableFolder: Assets/Samples/Ale VN Framework/1.0.0/VN Framework Demo/Assets/Backgrounds/
   backgroundAddressableExtension: .jpg
   backgroundFieldTitle: Background
   backgroundFadeDurationFieldTitle: BackgroundFadeDuration
   backgroundFadeDuration: 0.3
-  actorAddressableFolder: Assets/Demo/Assets/Actors/
+  actorAddressableFolder: Assets/Samples/Ale VN Framework/1.0.0/VN Framework Demo/Assets/Actors/
   actorAddressableExtension: .prefab
   actorFieldTitle:
   - Actor1Prefab
@@ -385,7 +385,7 @@ MonoBehaviour:
   - Actor1Anim
   - Actor2Anim
   - Actor3Anim
-  effectAddressableFolder: Assets/Demo/Assets/Effects/
+  effectAddressableFolder: Assets/Samples/Ale VN Framework/1.0.0/VN Framework Demo/Assets/Effects/
   effectAddressableExtension: .prefab
   effectFieldTitle:
   - Effect1Prefab

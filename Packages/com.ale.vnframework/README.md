@@ -189,7 +189,7 @@ com.ale.vnframework/
 ├── Docs~/                       Unity 不导入（~ 后缀）
 │   ├── Setup/PixelCrushers/     ⚠ Dialogue System 的 asmdef 副本与说明
 │   └── VnStoryManager/          使用文档、截图与演示视频
-└── Samples~/Demo/               演示 Sample
+└── Samples~/VN Framework Demo/  演示 Sample
     ├── VnStorySamples.unity     示例场景
     ├── VnStoryManagerBase.prefab
     ├── Data/StoryDatabase.asset 剧情库

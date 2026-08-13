@@ -31,7 +31,9 @@ Dialogue System 默认没有 asmdef、其代码正落在 `Assembly-CSharp` 里�
 ### 新增
 
 - **UPM 包结构**：`package.json`（1.0.0）、`CHANGELOG.md`、中文 `README.md`、MIT `LICENSE.md`；
-  `Samples~/Demo` 登记为可从 Package Manager 导入的样例（剧情库、管理器与播放器预制体、Spine 角色与特效资源、对话 UI 与示例场景）。
+  `Samples~/VN Framework Demo` 登记为可从 Package Manager 导入的样例（剧情库、管理器与播放器预制体、Spine 角色与特效资源、对话 UI 与示例场景）。
+  开发副本 `Assets/Samples/Ale VN Framework/1.0.0/VN Framework Demo` 与样例落地路径一致，
+  故 `VnStoryManager` 的四个资源地址前缀对两者通用、导入后无需订正。
 - **独立程序集 `Ale.VnFramework`**（`Runtime/Ale.VnFramework.asmdef`），引用
   `PixelCrushers` / `DialogueSystem` / `Ale.Toolkit.Runtime` / `Ale.AnimSimulatorSystem` /
   `Unity.TextMeshPro` / `Unity.Localization`。
@@ -70,6 +72,6 @@ Dialogue System 默认没有 asmdef、其代码正落在 `Assembly-CSharp` 里�
 - **音频接缝未接后端**：`VnStoryAudio` 整体包在 `VNS_FS_GAMEFRAMEWORK` 宏内，该宏默认关闭，
   此时四个播放 / 停止接口是空操作，剧情全程无声。开启该宏需要 `com.fs.gameframework`，
   并自行在 `Ale.VnFramework.asmdef` 补上 `Fs.GameFramework.Common.AudioSystem` 引用。
-- **样例里的 Addressables 地址前缀写死指向 `Assets/Demo/…`**。样例经 Package Manager 导入后会落到
-  `Assets/Samples/Ale VN Framework/1.0.0/Demo/`，此时需要在 `VnStoryManager` 上手工订正四个前缀字段。
+- **启用 `ATK_ADDRESSABLE` 时，导入后的样例文件夹需自行加入 Addressables 分组**。
+  地址前缀本身已对齐样例落地路径、无需订正，但本包无法替使用者写入其工程的 Addressables 配置。
 - **包内暂无 `Editor/` 与欢迎窗口**，也暂无 `VnActorAnimator` 等公共接口的 API 文档。

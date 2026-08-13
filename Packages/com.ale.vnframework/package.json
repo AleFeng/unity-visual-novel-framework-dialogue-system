@@ -26,7 +26,7 @@
     {
       "displayName": "VN Framework Demo",
       "description": "剧情演出演示：剧情库（StoryDatabase）、管理器与播放器预制体、Spine 角色与特效资源、对话 UI 与示例场景。",
-      "path": "Samples~/Demo"
+      "path": "Samples~/VN Framework Demo"
     }
   ]
 }
