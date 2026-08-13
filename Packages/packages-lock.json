@@ -14,6 +14,12 @@
         "com.unity.nuget.newtonsoft-json": "3.2.2"
       }
     },
+    "com.ale.vnframework": {
+      "version": "file:com.ale.vnframework",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {}
+    },
     "com.coplaydev.unity-mcp": {
       "version": "https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#main",
       "depth": 0,
