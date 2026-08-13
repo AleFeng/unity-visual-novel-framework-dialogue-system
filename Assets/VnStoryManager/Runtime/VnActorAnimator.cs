@@ -53,6 +53,10 @@ namespace PixelCrushers.DialogueSystem.VnStoryFramework
         /// </param>
         public void ExecuteInit(Vector3 toPos, Vector3 toRot, Vector3 toScale, string[] toStateArray)
         {
+            // 撤掉上一轮遗留的单条动画。状态动画不在此处理——它们由下面的差集切换负责，
+            // 差集切换比「全清再重放」更精准：同名循环动画不会被重头拉起。
+            StopAllAnims();
+
             // 先掐掉在途的位移 / 旋转 / 缩放补间。初始化是硬落位，不能让上一行对话遗留的
             // SetToPosition 补间在随后的帧里把这里写的位姿覆盖回它自己的终点。
             // 用 Kill 而非 CompleteTransformTween：后者会先把角色瞬置到旧目标点再被下面覆盖，
@@ -375,40 +379,202 @@ namespace PixelCrushers.DialogueSystem.VnStoryFramework
         // 两个 Demo 预制体都是 false，实际从未生效）。现统一由 AnimatorBase.StateInitList 持有，
         // 本组件不再重复配置——见 ExecuteInit 对 StateInitList 的写入。
 
+        // 状态与皮肤类接口一律经 RunWhenReady 门控，原因有两条，都是「不报错、只是不生效」的那种坑：
+        // ① 早于 AnimatorBase.Start 调 AddAnimState，会被它的 SwitchAnimStateArray(stateInitList)
+        //    当作「不在新列表里的旧状态」直接移除；
+        // ② AnimatorBase 的每个皮肤入口都以 InitSkin() 开头，而 InitSkin 先落锁 _isSkinInit
+        //    再让后端建表，骨架数据未就绪时会建出一张空表并【永不重试】，之后所有皮肤名都判不存在。
+
         /// <summary>
-        /// 切换 整个状态列表
+        /// 切换 整个状态列表：差集移除旧状态、差集添加新状态。
+        /// <para>⚠️ 传空数组表示「不进入任何状态」，会把渲染器引用计数减到 0 从而<b>淡出隐藏角色</b>
+        /// （这是 <c>AnimatorBase</c> 把可见性绑定在状态使用计数上的既有语义）。
+        /// 只想换动画、不想让角色消失时，不要传空数组。</para>
         /// </summary>
-        /// <param name="actorAnims"></param>
+        /// <param name="actorAnims">目标状态名列表。</param>
         public void SwitchStateArray(string[] actorAnims)
+            => RunWhenReady(() => { if (m_ActorAnimator) m_ActorAnimator.SwitchAnimStateArray(actorAnims); });
+
+        /// <summary>
+        /// 添加 一个状态：播放该状态配置的一组动画。状态已存在时不重复添加。
+        /// </summary>
+        /// <param name="state">状态名称。</param>
+        public void AddState(string state)
+            => RunWhenReady(() => { if (m_ActorAnimator) m_ActorAnimator.AddAnimState(state); });
+
+        /// <summary>
+        /// 移除 一个状态：停止该状态配置的一组动画。状态不存在时不处理。
+        /// </summary>
+        /// <param name="state">状态名称。</param>
+        public void RemoveState(string state)
+            => RunWhenReady(() => { if (m_ActorAnimator) m_ActorAnimator.RemoveAnimState(state); });
+        #endregion
+
+        #region 单条动画 播放与停止
+        // 动画名:正在播放的动画数据。
+        // 基类以 AnimData 的【引用地址】作为轨道播放栈里的身份标识，StopAnim 也只认引用；
+        // 而剧情侧手里只有字符串，所以要支持「按名停止」，就必须由本组件把那个引用留住。
+        private readonly Dictionary<string, AnimData> _playingAnimMap = new Dictionary<string, AnimData>();
+        // 批量停止时的暂存表，提为字段免得每次都新分配
+        private readonly List<AnimData> _stopAnimScratch = new List<AnimData>();
+
+        /// <summary>
+        /// 播放 单条动画（叠加在状态动画之上，不改变当前状态列表）。
+        ///
+        /// <para><b>轨道语义</b>：默认走 <see cref="EAnimTrack.Action"/>——它会压在状态动画之上，
+        /// 单次播完时基类自动把该轨道上被压住的上一条恢复播放，因此「插播一个动作、播完回到 idle」
+        /// 调用方不需要做任何事。</para>
+        ///
+        /// <para><b>完成回调只在「非循环、且真的播到时长尽头」时触发一次。</b>以下情形一律<b>不</b>触发：
+        /// ① <paramref name="isLoop"/> 为 true（调用时告警）；② <paramref name="speed"/> 为 0（返回 false）；
+        /// ③ 动画名在后端查不到（返回 true，但 <see cref="IsAnimPlaying"/> 随即为 false）；
+        /// ④ <b>动画时长为 0</b>——单帧姿势类动画都是这种，它们会正常摆出姿势并一直保持，只是没有「播完」这一刻；
+        /// ⑤ 被 <see cref="StopAnim"/>、<see cref="StopAllAnims"/> 或新一轮 <see cref="ExecuteInit"/> 打断。</para>
+        ///
+        /// <para><b>完成时刻是「时长 / 速度」的定时器估算</b>，不是动画后端的结束事件；混合时长与
+        /// timeScale 都会带来偏差。需要严格同步的场合不要依赖它。</para>
+        /// </summary>
+        /// <param name="animName">动画名称：动画软件中制作时的名称。</param>
+        /// <param name="animTrack">动画轨道。不同轨道可同时播放，枚举值大的覆盖枚举值小的。</param>
+        /// <param name="animTrackSub">动画子轨道，0~9。同一轨道下的不同子轨道可同时播放。</param>
+        /// <param name="isLoop">是否循环播放。循环时没有完成回调。</param>
+        /// <param name="isReverse">是否反向播放（从结束位置起、反方向播）。</param>
+        /// <param name="speed">播放速度倍率。为 0 时拒绝播放。</param>
+        /// <param name="startDelayTime">起播延时（秒）。</param>
+        /// <param name="onComplete">单次播放完成回调。</param>
+        /// <returns>是否受理了这次播放请求。<c>false</c> = 明确不会播，也不会有回调。</returns>
+        public bool PlayAnim(
+            string animName,
+            EAnimTrack animTrack = EAnimTrack.Action,
+            int animTrackSub = 0,
+            bool isLoop = false,
+            bool isReverse = false,
+            float speed = 1f,
+            float startDelayTime = 0f,
+            Action onComplete = null)
         {
-            // 切换 整个状态列表
-            if (m_ActorAnimator)
-                m_ActorAnimator.SwitchAnimStateArray(actorAnims);
+            if (!m_ActorAnimator) return false;
+            if (string.IsNullOrEmpty(animName)) return false;
+
+            // 把两处「回调静默不触发」显式化，不留给剧情侧去猜
+            if (Mathf.Approximately(speed, 0f))
+            {
+                Debug.LogWarning($"剧情演出 >> '{name}' 的动画 '{animName}' 速度为 0，将定格在起始帧，不予播放。");
+                return false;
+            }
+            if (isLoop && onComplete != null)
+                Debug.LogWarning($"剧情演出 >> '{name}' 播放循环动画 '{animName}' 时传了完成回调，该回调永远不会触发。");
+
+            // 同名已在播：先停掉旧的那一条，语义取「重头播」。
+            // 这顺带让「同一个 AnimData 实例不能同时播两次」这个坑不可能发生——每次都是新实例。
+            StopAnim(animName);
+
+            // AnimData 的构造函数收的是【完整轨道号】（主轨道 * 10 + 子轨道），与 Inspector 上那两个字段等价
+            int trackIndex = (int)animTrack * 10 + Mathf.Clamp(animTrackSub, 0, 9);
+            var animData = new AnimData(animName, trackIndex, isLoop, isReverse, speed, startDelayTime);
+            _playingAnimMap[animName] = animData;
+
+            RunWhenReady(() =>
+            {
+                if (!m_ActorAnimator) return;
+                // 挂起期间可能已被 StopAnim 或新一轮 ExecuteInit 取消
+                AnimData pending;
+                if (!_playingAnimMap.TryGetValue(animName, out pending) || !ReferenceEquals(pending, animData)) return;
+
+                // 播放令牌只在后端真的起播之后才递增，故「前后是否变化」正是「这次有没有播起来」。
+                // 不能用「令牌是否为 0」作判据：该轨道上此前播过别的动画时令牌早就非 0 了。
+                int tokenBefore = m_ActorAnimator.GetAnimPlayToken(trackIndex);
+
+                m_ActorAnimator.PlayAnim(animData, _ =>
+                {
+                    // 基类在回调前已经把这条停掉了，这里只做本组件的簿记
+                    AnimData cur;
+                    if (_playingAnimMap.TryGetValue(animName, out cur) && ReferenceEquals(cur, animData))
+                        _playingAnimMap.Remove(animName);
+                    if (onComplete != null) onComplete();
+                });
+
+                // 起播失败（动画名在后端查不到）时基类只留一句告警、不会有任何回调，
+                // 这里靠令牌未推进判定并把表清干净，免得 IsAnimPlaying 永远为真。
+                // 起播延时 > 0 的那次播放是推迟发生的，令牌当然还没变，故排除在判据之外。
+                if (startDelayTime <= 0f && m_ActorAnimator.GetAnimPlayToken(trackIndex) == tokenBefore)
+                    _playingAnimMap.Remove(animName);
+            });
+
+            return true;
         }
 
         /// <summary>
-        /// 添加状态。播放状态对应的动画。
+        /// 停止 由 <see cref="PlayAnim"/> 播放的指定名称的动画。该轨道上被它压住的上一条会自动恢复。
         /// </summary>
-        /// <param name="newState"></param>
-        /// <returns></returns>
-        public void AddState(string newState)
+        /// <param name="animName">动画名称。</param>
+        /// <returns>是否确实停掉了一条。</returns>
+        public bool StopAnim(string animName)
         {
-            // 添加状态
-            if (m_ActorAnimator)
-                m_ActorAnimator.AddAnimState(newState);
+            if (string.IsNullOrEmpty(animName)) return false;
+
+            AnimData animData;
+            if (!_playingAnimMap.TryGetValue(animName, out animData)) return false;
+
+            _playingAnimMap.Remove(animName);
+            // 必须交回同一个引用：基类以引用地址作身份标识
+            if (m_ActorAnimator) m_ActorAnimator.StopAnim(animData);
+            return true;
         }
-        
+
         /// <summary>
-        /// 移除状态。移除状态对应的动画。
+        /// 停止 全部由 <see cref="PlayAnim"/> 播放的单条动画。不影响状态动画。
         /// </summary>
-        /// <param name="newState"></param>
-        /// <returns></returns>
-        public void RemoveState(string newState)
+        public void StopAllAnims()
         {
-            // 移除状态
+            if (_playingAnimMap.Count == 0) return;
+
+            // 先快照再清空：StopAnim 会触发基类的轨道恢复，避免在字典上迭代时被改
+            _stopAnimScratch.Clear();
+            _stopAnimScratch.AddRange(_playingAnimMap.Values);
+            _playingAnimMap.Clear();
             if (m_ActorAnimator)
-                m_ActorAnimator.RemoveAnimState(newState);
+            {
+                foreach (var animData in _stopAnimScratch)
+                    m_ActorAnimator.StopAnim(animData);
+            }
+            _stopAnimScratch.Clear();
         }
+
+        /// <summary>
+        /// 指定名称的单条动画是否在播（含仍在等待起播延时的）。
+        /// </summary>
+        public bool IsAnimPlaying(string animName)
+            => !string.IsNullOrEmpty(animName) && _playingAnimMap.ContainsKey(animName);
+        #endregion
+
+        #region 换装 / 皮肤
+        /// <summary>
+        /// 设置 基础皮肤组（始终显示的一组皮肤），覆盖预制体上配置的那一组。
+        /// </summary>
+        public void SetBaseSkin(string[] baseSkinNames, bool isRefresh = true)
+            => RunWhenReady(() => { if (m_ActorAnimator) m_ActorAnimator.SetBaseSkin(baseSkinNames, isRefresh); });
+
+        /// <summary>
+        /// 添加 皮肤。可叠加多件；名称不存在时动画播放器会告警并忽略。
+        /// <para>本层只做透传，<b>没有</b><c>AnimActor</c> 那套「同一部位只能穿一件」的分组互斥语义。</para>
+        /// </summary>
+        /// <param name="skinName">皮肤名称：含文件夹路径时一般用 '/' 分隔。</param>
+        /// <param name="isRefresh">是否立即刷新显示。批量增删时前几次传 false、最后一次传 true。</param>
+        public void AddSkin(string skinName, bool isRefresh = true)
+            => RunWhenReady(() => { if (m_ActorAnimator) m_ActorAnimator.AddSkin(skinName, isRefresh); });
+
+        /// <summary>
+        /// 移除 皮肤。
+        /// </summary>
+        public void RemoveSkin(string skinName, bool isRefresh = true)
+            => RunWhenReady(() => { if (m_ActorAnimator) m_ActorAnimator.RemoveSkin(skinName, isRefresh); });
+
+        /// <summary>
+        /// 刷新 皮肤：把基础皮肤与应用中皮肤的并集重新应用到渲染器。
+        /// </summary>
+        public void RefreshSkin()
+            => RunWhenReady(() => { if (m_ActorAnimator) m_ActorAnimator.RefreshSkin(); });
         #endregion
 
         #region 粒子系统
