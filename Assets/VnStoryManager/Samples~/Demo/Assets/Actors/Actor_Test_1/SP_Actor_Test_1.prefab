@@ -1,0 +1,357 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &1777136331643849625
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 908767445295643864}
+  - component: {fileID: 6658499093166891122}
+  m_Layer: 0
+  m_Name: SP_Actor_Test_1
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &908767445295643864
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1777136331643849625}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -1, y: -14, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 7544516196132013654}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &6658499093166891122
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1777136331643849625}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 51f9cc3ca7cdbb848b1ab3ed9bb87207, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp-firstpass::PixelCrushers.DialogueSystem.VNStoryFramework.VNActorAnimator
+  m_AutoInit: 0
+  m_ActorPosSpeed: 3.5
+  m_ActorPosEase: 3
+  m_ActorRotateSpeed: 360
+  m_ActorRotateEase: 3
+  m_ActorScaleSpeed: 1.5
+  m_ActorScaleEase: 3
+  m_ActorAnimator: {fileID: 7663239551767054037}
+  m_ParticleSystemRoot: {fileID: 0}
+--- !u!1 &5003314378017644441
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7544516196132013654}
+  - component: {fileID: 4561752414879182209}
+  - component: {fileID: 462848035634100411}
+  - component: {fileID: 5133280223776683305}
+  - component: {fileID: 7663239551767054037}
+  m_Layer: 0
+  m_Name: SP_Role_Test_1
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &7544516196132013654
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5003314378017644441}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 908767445295643864}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!33 &4561752414879182209
+MeshFilter:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5003314378017644441}
+  m_Mesh: {fileID: 0}
+--- !u!23 &462848035634100411
+MeshRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5003314378017644441}
+  m_Enabled: 1
+  m_CastShadows: 1
+  m_ReceiveShadows: 1
+  m_DynamicOccludee: 1
+  m_StaticShadowCaster: 0
+  m_MotionVectors: 1
+  m_LightProbeUsage: 1
+  m_ReflectionProbeUsage: 1
+  m_RayTracingMode: 2
+  m_RayTraceProcedural: 0
+  m_RayTracingAccelStructBuildFlagsOverride: 0
+  m_RayTracingAccelStructBuildFlags: 1
+  m_SmallMeshCulling: 1
+  m_ForceMeshLod: -1
+  m_MeshLodSelectionBias: 0
+  m_RenderingLayerMask: 1
+  m_RendererPriority: 0
+  m_Materials:
+  - {fileID: 2100000, guid: 86a1bf2f681a91443a223fc17a199a14, type: 2}
+  m_StaticBatchInfo:
+    firstSubMesh: 0
+    subMeshCount: 0
+  m_StaticBatchRoot: {fileID: 0}
+  m_ProbeAnchor: {fileID: 0}
+  m_LightProbeVolumeOverride: {fileID: 0}
+  m_ScaleInLightmap: 1
+  m_ReceiveGI: 1
+  m_PreserveUVs: 0
+  m_IgnoreNormalsForChartDetection: 0
+  m_ImportantGI: 0
+  m_StitchLightmapSeams: 1
+  m_SelectedEditorRenderState: 3
+  m_MinimumChartSize: 4
+  m_AutoUVMaxDistance: 0.5
+  m_AutoUVMaxAngle: 89
+  m_LightmapParameters: {fileID: 0}
+  m_GlobalIlluminationMeshLod: 0
+  m_SortingLayerID: 0
+  m_SortingLayer: 0
+  m_SortingOrder: 0
+  m_MaskInteraction: 0
+  m_AdditionalVertexStreams: {fileID: 0}
+--- !u!114 &5133280223776683305
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5003314378017644441}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d247ba06193faa74d9335f5481b2b56c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: spine-unity::Spine.Unity.SkeletonAnimation
+  skeletonDataAsset: {fileID: 11400000, guid: 17cf845fc648c9f43a68f97c93858996, type: 2}
+  initialSkinName: 
+  fixPrefabOverrideViaMeshFilter: 2
+  initialFlipX: 0
+  initialFlipY: 0
+  updateWhenInvisible: 3
+  separatorSlotNames: []
+  zSpacing: 0
+  useClipping: 1
+  immutableTriangles: 0
+  pmaVertexColors: 1
+  clearStateOnDisable: 0
+  tintBlack: 0
+  singleSubmesh: 0
+  fixDrawOrder: 0
+  addNormals: 0
+  calculateTangents: 0
+  maskInteraction: 0
+  maskMaterials:
+    materialsMaskDisabled: []
+    materialsInsideMask: []
+    materialsOutsideMask: []
+  disableRenderingOnOverride: 1
+  physicsPositionInheritanceFactor: {x: 1, y: 1}
+  physicsRotationInheritanceFactor: 1
+  physicsMovementRelativeTo: {fileID: 0}
+  updateTiming: 1
+  unscaledTime: 0
+  _animationName: 
+  loop: 1
+  timeScale: 1
+--- !u!114 &7663239551767054037
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5003314378017644441}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 886f5bb9b502ab545bfb14229d650da6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp-firstpass::Fs.GameFramework.Gameplay.AnimSimulatorSystem.SpineAnimator
+  animFadeDuration: 0.2
+  isDisplayOnInit: 0
+  stateInitList:
+  - idle
+  baseSkins: []
+  spineSkeletonAnimation: {fileID: 5133280223776683305}
+  spineStateData:
+  - stateName: idle
+    spineSkeletonAnimation: {fileID: 0}
+    spineAnimDatas:
+    - animName: A_Body_Idle
+      animTrack: 1
+      animTrackSub: 0
+      isLoop: 1
+      isReverse: 0
+      speed: 1
+      startDelayTime: 0
+      loopIntervalTimeRange: {x: 0, y: 0}
+    - animName: A_Body_Pose_Idle
+      animTrack: 900
+      animTrackSub: 0
+      isLoop: 0
+      isReverse: 0
+      speed: 1
+      startDelayTime: 0
+      loopIntervalTimeRange: {x: 0, y: 0}
+    - animName: A_Ear_L_Twitch
+      animTrack: 8
+      animTrackSub: 0
+      isLoop: 1
+      isReverse: 0
+      speed: 1
+      startDelayTime: 0
+      loopIntervalTimeRange: {x: 0, y: 7}
+    - animName: A_Ear_R_Twitch
+      animTrack: 8
+      animTrackSub: 1
+      isLoop: 1
+      isReverse: 0
+      speed: 1
+      startDelayTime: 0
+      loopIntervalTimeRange: {x: 0, y: 13}
+  - stateName: akimbo
+    spineSkeletonAnimation: {fileID: 0}
+    spineAnimDatas:
+    - animName: A_Body_Idle
+      animTrack: 1
+      animTrackSub: 0
+      isLoop: 1
+      isReverse: 0
+      speed: 1
+      startDelayTime: 0
+      loopIntervalTimeRange: {x: 0, y: 0}
+    - animName: A_Body_Pose_Akimbo
+      animTrack: 900
+      animTrackSub: 0
+      isLoop: 0
+      isReverse: 0
+      speed: 1
+      startDelayTime: 0
+      loopIntervalTimeRange: {x: 0, y: 0}
+    - animName: A_Ear_L_Twitch
+      animTrack: 8
+      animTrackSub: 0
+      isLoop: 1
+      isReverse: 0
+      speed: 1
+      startDelayTime: 0
+      loopIntervalTimeRange: {x: 0, y: 7}
+    - animName: A_Ear_R_Twitch
+      animTrack: 8
+      animTrackSub: 1
+      isLoop: 1
+      isReverse: 0
+      speed: 1
+      startDelayTime: 0
+      loopIntervalTimeRange: {x: 0, y: 13}
+  - stateName: face_amaze
+    spineSkeletonAnimation: {fileID: 0}
+    spineAnimDatas:
+    - animName: A_Face_Amaze
+      animTrack: 3
+      animTrackSub: 0
+      isLoop: 1
+      isReverse: 0
+      speed: 1
+      startDelayTime: 0
+      loopIntervalTimeRange: {x: 0, y: 0}
+  - stateName: face_anger
+    spineSkeletonAnimation: {fileID: 0}
+    spineAnimDatas:
+    - animName: A_Face_Anger
+      animTrack: 3
+      animTrackSub: 0
+      isLoop: 1
+      isReverse: 0
+      speed: 1
+      startDelayTime: 0
+      loopIntervalTimeRange: {x: 0, y: 0}
+  - stateName: face_happy
+    spineSkeletonAnimation: {fileID: 0}
+    spineAnimDatas:
+    - animName: A_Face_Happy
+      animTrack: 3
+      animTrackSub: 0
+      isLoop: 1
+      isReverse: 0
+      speed: 1
+      startDelayTime: 0
+      loopIntervalTimeRange: {x: 0, y: 0}
+  - stateName: face_idle
+    spineSkeletonAnimation: {fileID: 0}
+    spineAnimDatas:
+    - animName: A_Face_Idle
+      animTrack: 3
+      animTrackSub: 0
+      isLoop: 1
+      isReverse: 0
+      speed: 1
+      startDelayTime: 0
+      loopIntervalTimeRange: {x: 0, y: 0}
+  - stateName: face_sad
+    spineSkeletonAnimation: {fileID: 0}
+    spineAnimDatas:
+    - animName: A_Face_Sad
+      animTrack: 3
+      animTrackSub: 0
+      isLoop: 1
+      isReverse: 0
+      speed: 1
+      startDelayTime: 0
+      loopIntervalTimeRange: {x: 0, y: 0}
+  - stateName: face_shy
+    spineSkeletonAnimation: {fileID: 0}
+    spineAnimDatas:
+    - animName: A_Face_Shy
+      animTrack: 3
+      animTrackSub: 0
+      isLoop: 1
+      isReverse: 0
+      speed: 1
+      startDelayTime: 0
+      loopIntervalTimeRange: {x: 0, y: 0}
+  - stateName: face_think
+    spineSkeletonAnimation: {fileID: 0}
+    spineAnimDatas:
+    - animName: A_Face_Think
+      animTrack: 3
+      animTrackSub: 0
+      isLoop: 1
+      isReverse: 0
+      speed: 1
+      startDelayTime: 0
+      loopIntervalTimeRange: {x: 0, y: 0}
