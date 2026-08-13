@@ -1,135 +1,208 @@
-# Ale VN Framework（剧情演出框架）
+# 剧情演出框架（VN Framework）
 
-基于 [Pixel Crushers Dialogue System](https://assetstore.unity.com/packages/tools/behavior-ai/dialogue-system-for-unity-11672)
-的视觉小说（Visual Novel / Galgame）剧情演出框架。Dialogue System 负责对话数据、分支与 Lua 环境，
-本包在其之上补齐**演出层**：背景 / 角色 / 特效 / 头像的切换与补间、消息提示、富文本符号、多语言条目、
-自动播放与跳过。
+面向策划的 Unity 视觉小说（Visual Novel / Galgame）**演出层**插件，建立在 Pixel Crushers Dialogue System 之上。
+Dialogue System 负责对话数据、分支逻辑与 Lua 环境；本插件把「这句话时背景换成什么、谁站在哪、播什么动画、
+出什么特效、放什么音」变成**对话节点上的字段条目**，配置全程在 Dialogue 编辑器窗口内完成。
 
-角色动画经 `VnActorAnimator` 对接 [`com.ale.animsimulatorsystem`](https://github.com/AleFeng/unity-ale-anim-simulator)，
-**后端无关**——Spine / Live2D / Unity 动画都走同一套接口；没有 `VnActorAnimator` 组件的纯图片、
-纯粒子预制体也能正常实例化与销毁。
+- 演出配置**不写代码**：字段条目的 `Title` 指明用途、`Value` 用 `|` 分隔参数。
+- 资源按**目录约定**加载，配置里只写资源名；可选经 Addressables 异步加载。
+- 角色动画**后端无关**（Spine / Live2D / Unity 动画），且不挂动画组件的预制体也走同一套流程。
+
+> 安装、环境要求、依赖顺序与整体介绍见[仓库根 README](../../README.md)，本文不再赘述。
 
 ---
 
-## 依赖与安装顺序
+## 功能概览
 
-| 依赖 | 版本 | 来源 | 必需 |
+| 演出对象 | 字段条目（默认标题） | 内容值格式 | 说明 |
 |---|---|---|---|
-| Dialogue System for Unity | — | Asset Store（付费） | ✅ **且需补 asmdef，见下节** |
-| `com.ale.toolkit` | ≥ 1.7.9 | git URL | ✅ |
-| `com.ale.animsimulatorsystem` | ≥ 2.6.0 | git URL | ✅ |
-| `com.unity.textmeshpro` / `com.unity.localization` | — | Package Manager | 可选，见「可选宏开关」 |
-| `com.fs.gameframework` | — | 私有 | 可选，仅音频后端需要 |
+| **背景** | `Background` | 图片文件名 | 切换场景背景 |
+| | `BackgroundFadeDuration` | 秒（默认 `0.3`） | 淡入淡出时长 |
+| **角色** | `Actor1Prefab` ~ `Actor3Prefab` | `文件夹/预制体名` | 出场；置空则清除 |
+| | `Actor1Pos` ~ | `X\|Y\|Z\|速度倍率` | 位置，可只填前几项 |
+| | `Actor1Rotate` ~ | `X\|Y\|Z\|速度倍率` | 旋转 |
+| | `Actor1Scale` ~ | `X\|Y\|Z\|速度倍率` | 缩放 |
+| | `Actor1Anim` ~ | `Key1\|Key2\|Key3` | 动画状态 |
+| **特效** | `Effect1Prefab` ~ `Effect3Prefab` | `文件夹/预制体名` | 同角色，四组条目一致 |
+| | `Effect1Pos` / `Rotate` / `Scale` / `Anim` ~ | 同上 | |
+| **头像** | `DialogueHead` | 图片文件名 | 对话框头像 |
+| **音频** | `AudioBGM1` ~ / `AudioAmbient1` ~ / `AudioSFX1` ~ / `AudioVoice1` ~ | `Key\|音量\|音调\|延迟` | 见[音频接缝](#音频接缝) |
+| **文本** | `DialogueTypewriterSpeed` | 倍率 | 打字机速度 |
 
-⚠️ **`package.json` 的 `dependencies` 是空的**，装本包**不会**自动拉取上述依赖。
-原因是 `com.ale.toolkit` 与 `com.ale.animsimulatorsystem` 经 git URL 分发，而 UPM 不支持在
-`dependencies` 里写 git URL。**请按 toolkit → animsimulatorsystem → 本包的顺序安装**，
-颠倒会报「找不到 `Ale.Toolkit.*` / `Ale.AnimSimulatorSystem`」。
+> 上表是**默认标题**，全部可在 `VnStoryManager` 上改。角色 / 特效 / 音频默认各 3 个槽位，
+> 用 `[+] [-]` 增删即可支持更多同屏对象。逐项的图文说明见
+> [VnStoryManager 使用文档](Docs~/VnStoryManager/VnStoryManager.md#剧情演出配置)。
 
-## ⚠ 前置条件：为 Dialogue System 补 Assembly Definitions
+### 字段条目机制
 
-**这一步不做，本包编译不过。**
+演出的全部输入都是 Dialogue System 原生的 **Field**，因此不需要为本插件学一套新编辑器：
 
-本包是 UPM 包，代码位于独立程序集 `Ale.VnFramework`。而 asmdef 程序集**无法引用预定义程序集
-`Assembly-CSharp`**——Dialogue System 默认没有 asmdef，它的代码正落在那里，于是从包里看不见
-`DialogueManager`、`StandardUIResponseButton` 这些类型。
+- **`Title`（字段标题）** —— 告诉演出系统这条数据的用途。`VnStoryManager` 上以 `FieldTitle` 结尾的
+  设置项保存了这些标题，改设置即改标题，互不写死。
+- **`Value`（内容值）** —— 具体参数。多参数用 `|` 分隔，**可只填前几项，未填的用默认值**
+  （位置默认 `0|0|0|1.0`，所以 `1|-14` 是合法的）。
+- **`Type`（条目类型）** —— 演出条目一般用 `Text`；`Actor` / `Boolean` / `Localization` 用于
+  Dialogue System 自身的角色、开关与多语言字段。
 
-Pixel Crushers 官方提供了 asmdef 方案（见 `Pixel Crushers/Dialogue System/Scripts/_README.txt`）。
-本包在 **[`Docs~/Setup/PixelCrushers/`](Docs~/Setup/PixelCrushers/README.md)** 附了一份整理好的副本：
-6 个 `.asmdef` 已按目标相对路径摆放，整体复制到你的 `Pixel Crushers/` 目录即可。
+⚠️ Inspector 上方重复显示的**主要字段条目不要删除**——它们是 Dialogue System 的内置字段。
 
-其中第 6 个是**补官方遗漏的补丁**：官方布局会把 `Templates/Scripts/Editor/` 下 3 个纯编辑器脚本
-卷进运行时程序集，而它们用了 `UnityEditor` 却没有 `#if UNITY_EDITOR` 保护——
-**编辑器里编译不报错，只在出包时失败**。详情与逐条说明见
-[`Docs~/Setup/PixelCrushers/README.md`](Docs~/Setup/PixelCrushers/README.md)。
+### 剧情演出（`VnStoryManager`）
 
-## 基础设置
+演出核心单例（派生自 `ToolkitMonoSingleton`）。订阅 Dialogue System 的对话推进，逐节点解析字段条目，
+驱动背景 / 角色 / 特效 / 头像 / 消息，并统一管理预制体的加载与卸载。
 
-![Dialogue System 欢迎窗口](Docs~/image.png)
+- **资源目录约定**：背景 / 角色 / 头像 / 特效各配一组「文件夹路径 + 扩展名」
+  （`backgroundAddressableFolder` / `…Extension`、`actorAddressableFolder` / `…Extension`、
+  `dialogueHeadAddressableFolder` / `dialogueHeadExtension`、`effectAddressableFolder` / `…Extension`），
+  配置里只写资源名。路径以 `Assets/` 开头、以 `/` 结尾。
+  加载经 `ToolkitAssets` 统一入口——开启 `ATK_ADDRESSABLE` 时走 Addressables 异步加载并回收句柄，
+  否则回落 `Resources`。
+  ⚠️ **这八个设置项本身包在 `#if ATK_ADDRESSABLE` 内，未开启该宏时不会出现在 Inspector 上。**
+- **预制体生命周期**：角色与特效走**同一套**加载 / 定位 / 卸载流程。预制体设置一次持续存在，
+  把 `Value` 置空才清除。
+- **补间**：位置 / 旋转 / 缩放的第 4 个参数是速度倍率；背景切换可经 Dialogue System 的
+  `StandardSceneTransitionManager` 做淡入淡出。
+- **富文本与打字机**：支持富文本图标符号与打字机符号，可在逐字显示中插入停顿与表情图标。
+- **多语言**：开启 `HAS_LOCALIZATION` 后，`[字段标题]+[语言代码]` 形式的条目接 Unity Localization。
 
-在 `Tools → Pixel Crushers → Dialogue System → Welcome Window` 打开欢迎界面，
-在 **Enable support for** 栏勾选实际用到的插件：
+### 播放控制（`VnStoryPlayer`）
 
-| 选项 | 用途 |
-|---|---|
-| TextMesh Pro | 文本显示组件，支持更丰富的文本样式 |
-| 2D Physics | 2D 物理系统，支持角色的碰撞检测 |
-| Addressables | 资源管理系统，支持更高效的资源加载 |
-| New Input System | 输入系统，支持更灵活的输入配置 |
-| Timeline | 时间轴系统，支持更复杂的剧情演出 |
-
-## 快速开始
-
-1. 按上面两节装好依赖、补好 Dialogue System 的 asmdef。
-2. Package Manager → **Ale VN Framework** → Samples → 导入 **VN Framework Demo**。
-3. 打开样例场景 `VnStorySamples.unity` 直接运行，即可看到完整的剧情演出流程。
-4. 参照 [使用文档](Docs~/VnStoryManager/VnStoryManager.md) 配置自己的剧情库、角色与资源。
-
-代码侧启动一段剧情：
+挂在任意 GameObject 上，按对话名启停某段剧情。可在 Inspector 配置对话名与自动播放时机
+（嵌套枚举 `AutoPlayTiming`），也可由 `Button.OnClick` 或脚本触发。
 
 ```csharp
 using Ale.VnFramework;
 
-// 方式一：挂 VnStoryPlayer 组件，在 Inspector 配置对话名与自动播放时机，
-//         也可由 Button.OnClick 触发。
-// 方式二：直接调管理器。
 VnStoryManager.Instance.StartVnStory("Chapter01/Prologue");
-VnStoryManager.Instance.StopVnStory();
+VnStoryManager.Instance.StopVnStory();                 // 默认清空演出数据
+VnStoryManager.Instance.StopVnStory(clearAllData: false);
+
+string[] names = VnStoryManager.Instance.GetAllConversationName();
 ```
 
-> ⚠️ 样例导入后会落到 `Assets/Samples/Ale VN Framework/1.0.0/Demo/`，
-> 而 `VnStoryManager` 上的四个 Addressables 地址前缀默认写死指向 `Assets/Demo/…`，
-> 需要手工订正为样例的实际路径。
+### 角色动画对接（`VnActorAnimator`）
 
-## 可选宏开关
+演出层与动画系统之间的唯一接缝。组件只持有 `com.ale.animsimulatorsystem` 的 **`AnimatorBase`**，
+因此 Spine / Live2D / Unity 动画对演出层完全一致；Inspector 栏名为 **Actor Animator**，
+留空时经 `AnimatorBase.FindFor(this)` 自动获取。
 
-| 宏 | 作用 | 由谁定义 |
-|---|---|---|
-| `HAS_TMPRO` | 启用 TextMeshPro 文本路径（`VnResponseButton` / `VnStoryManager`） | **Fs GameFramework** 的 DefineChecker |
-| `HAS_LOCALIZATION` | 启用 Unity Localization 的多语言条目 | **Fs GameFramework** 的 DefineChecker |
-| `ATK_ADDRESSABLE` | 资源经 `ToolkitAssets` 走 Addressables，否则回落 `Resources` | Ale Toolkit 的 DefineChecker |
-| `VNS_FS_GAMEFRAMEWORK` | 把 `VnStoryAudio` 接到 Fs 的 `AudioManager` | 手工添加 |
+- **就绪门控** —— 播放、状态切换、皮肤接口一律排在动画器初始化完成之后执行，**不依赖帧序**。
+  外部调用无需关心组件是否已 `Start`。
+- **单条播放与回调** —— 支持按名播放单条动画（可配循环 / 倒放 / 速度 / 延迟）并在播完时回调，
+  以及按名停止。
+- **状态与皮肤** —— 状态数组切换、换装皮肤的读写。
+- **初始状态**配在动画器组件（`AnimatorBase.StateInitList`）上；对话节点的 `ActorNAnim` 条目
+  **缺失**时沿用预制体自身初始状态，**为空**时才清空。
 
-⚠️ **`HAS_TMPRO` 与 `HAS_LOCALIZATION` 目前由 `com.fs.gameframework` 维护，不是本包也不是
-Ale Toolkit 维护的。** 没装 Fs 的工程里这两个宏不会被自动定义，对应功能会静默关闭——
-即使 `Ale.VnFramework.asmdef` 已经引用了 `Unity.TextMeshPro` / `Unity.Localization`。
-需要时可在 Project Settings 手工添加这两个宏。（后续版本考虑改用 Ale Toolkit 的 `ATK_TMP` / `ATK_LOCALIZATION`。）
+> ⚠️ `SwitchStateArray(空数组)` 会隐藏角色——这是 `AnimatorBase` 把可见性绑在状态使用计数上的既有语义。
 
-⚠️ **`VNS_FS_GAMEFRAMEWORK` 默认关闭，此时剧情全程无声。** `VnStoryAudio` 整个文件包在该宏内，
-关闭时四个播放 / 停止接口是空操作。开启它需要 `com.fs.gameframework`，
-并自行在 `Runtime/Ale.VnFramework.asmdef` 的 `references` 补上 `Fs.GameFramework.Common.AudioSystem`
-（本包默认不引用它，以免没装 Fs 的使用者每次域重载都吃一条未解析引用警告）。
+### 无动画组件的预制体降级
+
+角色与特效本质上是同一套预制体流程，因此**不挂 `VnActorAnimator` 的预制体同样可用**：
+自动播放的粒子特效、单张图片的预制体都能正常实例化与销毁。
+
+- 加载时若未找到 `VnActorAnimator`，走降级路径（仅记一条 Log，不报警告）。
+- 卸载时对纯粒子预制体先 `Stop(StopEmitting)`，按最大 `startLifetime` 延迟销毁，让粒子自然消散。
+- 三条降级路径都会正常销毁实例并释放 Addressable 句柄，不残留、不泄漏。
+
+> 限制：位移 / 旋转 / 缩放的补间**速度与缓动参数序列化在 `VnActorAnimator` 上**，
+> 没有该组件就没有参数，因此降级路径为瞬间置位而非补间。
+
+### 分支选项（`VnResponseButton`）
+
+派生自 Dialogue System 的 `StandardUIResponseButton`，在原有行为上叠加**已读 / 未读态**表现：
+按状态切换文本颜色、按钮颜色、提示对象显示与图片颜色。已读状态存在 Dialogue System 的 Lua 变量里，
+可用于实现「阅读所有选项后才解锁」这类玩法，见
+[功能示例 - 阅读所有选项](Docs~/VnStoryManager/VnStoryManager.md#阅读所有选项)。
+
+### 音频接缝
+
+`VnStoryAudio` 是一个 `internal static` 的薄接缝，对演出侧只暴露四件事：
+按**通道**播放 / 停止（承载 BGM），按 **Key** 播放 / 停止（承载环境音、音效、语音）。
+
+> ⚠️ **该文件整体包在 `VNS_FS_GAMEFRAMEWORK` 宏内，宏默认关闭，此时四个接口是空操作、剧情全程无声。**
+> 开启需要 `com.fs.gameframework`，并自行在 `Runtime/Ale.VnFramework.asmdef` 的 `references` 补上
+> `Fs.GameFramework.Common.AudioSystem`——本包默认不引用它，以免没装 Fs 的使用者每次域重载
+> 都吃一条未解析引用警告。
+
+### 对外扩展点
+
+```csharp
+// 按字段标题接管演出流程：节点上出现该标题的条目时，回调收到其内容值
+VnStoryManager.Instance.RegisterGameplaySystem("QuestUnlock", value => { /* 自定义玩法 */ });
+VnStoryManager.Instance.UnregisterGameplaySystem("QuestUnlock");
+
+// 把宿主变量同步进 Dialogue System 的 Lua 环境（供对话条件 / 分支使用）
+VnStoryManager.Instance.RegisterVariableGetter("PlayerLevel", () => player.Level);
+VnStoryManager.Instance.SetAllVariablesToDialogueSystem();
+```
+
+`RegisterGameplaySystem` 接受**任意**字段标题，不限于内置白名单——这是把任务系统、好感度系统等
+接进剧情流程的入口。
+
+---
+
+## UI 样式
+
+样例中的 `DialogueUI_Main` 预制体给出了一整套可直接改的对话 UI：玩家对话面板与配角对话面板、
+分支选项面板、消息提示面板，以及继续按钮的 UI 动画。逐项说明见
+[使用文档 - UI样式](Docs~/VnStoryManager/VnStoryManager.md#ui样式)。
+
+---
+
+## 配置流程
+
+完整图文步骤见 [VnStoryManager 使用文档](Docs~/VnStoryManager/VnStoryManager.md)，此处为脉络：
+
+1. **剧情演出管理器预制体** —— 在 Project 面板的预制体源文件上改配置（不是场景实例），
+   配好四组资源「文件路径与类型」和各类「字段条目的标题」。二者都有可用默认值，
+   [通常无需修改](Docs~/VnStoryManager/VnStoryManager.md#资源配置)。
+2. **资源导入** —— 按类别放进约定目录：
+   [背景图片](Docs~/VnStoryManager/VnStoryManager.md#背景图片的导入)、
+   [角色头像](Docs~/VnStoryManager/VnStoryManager.md#角色头像图片的导入)、
+   [角色](Docs~/VnStoryManager/VnStoryManager.md#角色的导入)（含
+   [角色动画预制体](Docs~/VnStoryManager/VnStoryManager.md#角色动画预制体)的制作）、
+   [特效](Docs~/VnStoryManager/VnStoryManager.md#特效的导入)、
+   [音频](Docs~/VnStoryManager/VnStoryManager.md#音频的导入)、
+   [富文本图标](Docs~/VnStoryManager/VnStoryManager.md#富文本图标的导入)。
+3. **剧情演出配置** —— 在 Dialogue 编辑器里编排
+   [角色](Docs~/VnStoryManager/VnStoryManager.md#角色)、
+   [对话节点](Docs~/VnStoryManager/VnStoryManager.md#对话节点)、
+   [分支对话节点](Docs~/VnStoryManager/VnStoryManager.md#分支对话节点)，
+   并在节点上添加演出用的字段条目。
+4. **触发播放** —— 挂 `VnStoryPlayer` 或直接调 `VnStoryManager.Instance.StartVnStory(...)`。
+
+---
 
 ## 目录结构
 
 ```
 com.ale.vnframework/
-├── package.json
-├── README.md                     本文件
-├── CHANGELOG.md
-├── LICENSE.md                    MIT
 ├── Runtime/
-│   ├── Ale.VnFramework.asmdef    唯一的程序集（无编辑器代码）
-│   ├── VnStoryManager.cs         演出核心：背景/角色/特效/头像/消息/变量/扩展点
-│   ├── VnStoryPlayer.cs          播放控制：按对话名启停，自动播放时机
-│   ├── VnActorAnimator.cs        角色动画对接层（→ AnimatorBase，后端无关）
-│   ├── VnResponseButton.cs       分支选项按钮（已读/未读态）
-│   └── VnStoryAudio.cs           音频接缝（默认空实现）
-├── Docs~/                        Unity 不导入（~ 后缀）
-│   ├── Setup/PixelCrushers/      ⚠ Dialogue System 的 asmdef 副本 + 说明
-│   └── VnStoryManager/           使用文档与截图
-└── Samples~/
-    └── Demo/                     样例：剧情库、预制体、Spine 角色、特效、UI、场景
+│   ├── Ale.VnFramework.asmdef   唯一程序集（无编辑器代码）
+│   ├── VnStoryManager.cs        演出核心：字段条目解析、背景/角色/特效/头像/消息、
+│   │                            预制体生命周期、全局变量、玩法扩展点
+│   ├── VnStoryPlayer.cs         播放控制：按对话名启停、自动播放时机
+│   ├── VnActorAnimator.cs       角色动画对接层（→ AnimatorBase，就绪门控）
+│   ├── VnResponseButton.cs      分支选项按钮（已读 / 未读态）
+│   └── VnStoryAudio.cs          音频接缝（宏关闭时为空实现）
+├── Docs~/                       Unity 不导入（~ 后缀）
+│   ├── Setup/PixelCrushers/     ⚠ Dialogue System 的 asmdef 副本与说明
+│   └── VnStoryManager/          使用文档、截图与演示视频
+└── Samples~/Demo/               演示 Sample
+    ├── VnStorySamples.unity     示例场景
+    ├── VnStoryManagerBase.prefab
+    ├── Data/StoryDatabase.asset 剧情库
+    └── Assets/                  Actors(Spine) / ActorsHead / Backgrounds /
+                                 Effects / Emoji / UI / TextTable
 ```
 
-## 文档
+---
 
-- **[VnStoryManager 使用文档](Docs~/VnStoryManager/VnStoryManager.md)** —— 资源导入、剧情演出配置、
-  UI 样式与功能示例的完整说明。
-- [为 Dialogue System 补 Assembly Definitions](Docs~/Setup/PixelCrushers/README.md) —— 前置条件的操作步骤。
-- [更新日志](CHANGELOG.md)
+## 详细文档
 
-## 许可
-
-[MIT](LICENSE.md)。注意 Dialogue System 与样例中的第三方美术资源（Cartoon FX Remaster 等）
-各自遵循其原有许可，不在本许可范围内。
+- **[VnStoryManager 使用文档](Docs~/VnStoryManager/VnStoryManager.md)** —— 资源配置、资源导入、
+  剧情演出配置、UI 样式、功能示例的逐项图文说明（含演示视频）。
+- [为 Dialogue System 补 Assembly Definitions](Docs~/Setup/PixelCrushers/README.md) —— 安装前置条件的
+  操作步骤与原理（**不做则本包编译不过**）。
+- [更新日志](CHANGELOG.md) ｜ [许可](LICENSE.md)
