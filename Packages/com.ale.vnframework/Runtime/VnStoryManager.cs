@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using UnityEngine;
+using UnityEngine.Scripting;
 using UnityEngine.UI;
 using Ale.Toolkit.Runtime;
 using PixelCrushers;
@@ -181,20 +182,40 @@ namespace Ale.VnFramework
             return conversationNames;
         }
 
+        // ── Dialogue System 的消息处理器（以下四个） ─────────────────────────────
+        //
+        // 它们由 DialogueManager 经 BroadcastMessage **按方法名字符串**调用，代码里没有任何
+        // 直接引用。两个后果，两条应对：
+        //
+        // ① **托管裁剪**：对 IL2CPP 的静态分析器而言，这是「没有任何调用方的方法」——
+        //    教科书级的裁剪目标。目前 ProjectSettings 的 managedStrippingLevel 未设、走默认 Low，
+        //    不裁用户程序集，所以尚未发作；一旦为移动端调到 Medium / High 就会变成真 bug
+        //    （本工程 Android 已是 IL2CPP）。故一律加 [Preserve]。
+        // ② **可覆写**：Pixel Crushers 自己的组件把这些声明为 public virtual（其插件内有 32 处），
+        //    子类得以拦截或扩展演出流程。本类此前是 private，比任何一个 PC 组件都严。
+        //    四个类都不是 sealed、当前也没有任何子类，故提升为 public virtual 纯属加法。
+        //
+        // ⚠️ 覆写时务必调用 base，否则整条演出链路会断掉。
+
         /// <summary>
-        /// 当 对话 开始。
+        /// 当 对话 开始。由 Dialogue System 经 <c>BroadcastMessage</c> 调用。
+        /// <para>覆写点：可在此暂停宿主的场景 BGM、切换输入模式等。<b>请调用 base。</b></para>
         /// </summary>
         /// <param name="actor"></param>
-        private void OnConversationStart(Transform actor)
+        [Preserve]
+        public virtual void OnConversationStart(Transform actor)
         {
             // TODO: 暂停当前BGM
         }
-        
+
         /// <summary>
-        /// 当 对话 结束。
+        /// 当 对话 结束。由 Dialogue System 经 <c>BroadcastMessage</c> 调用。
+        /// <para>覆写点：可在此恢复宿主的场景 BGM。<b>请调用 base</b>——
+        /// 下面这几个 Clear 负责回收全部演出资源，跳过会造成句柄泄漏。</para>
         /// </summary>
         /// <param name="actor"></param>
-        private void OnConversationEnd(Transform actor)
+        [Preserve]
+        public virtual void OnConversationEnd(Transform actor)
         {
             // 清除所有 对话 头像图像
             ClearAllDialogueHeadImage();
@@ -211,10 +232,13 @@ namespace Ale.VnFramework
         }
         
         /// <summary>
-        /// 当 对话行 开始。
+        /// 当 对话行 开始。由 Dialogue System 经 <c>BroadcastMessage</c> 调用，是整条演出的分发中枢。
+        /// <para>覆写点：可在 base 之前做前置处理、之后做收尾，或整段替换以自定义分发顺序。
+        /// <b>不调 base 就等于关掉全部演出</b>（背景 / 角色 / 特效 / 音频 / 玩法系统都在里面）。</para>
         /// </summary>
         /// <param name="subtitle"></param>
-        private void OnConversationLine(Subtitle subtitle)
+        [Preserve]
+        public virtual void OnConversationLine(Subtitle subtitle)
         {
             if (subtitle == null) return;
             
@@ -233,12 +257,14 @@ namespace Ale.VnFramework
         }
         
         /// <summary>
-        /// 当 对话行 结束。
+        /// 当 对话行 结束。由 Dialogue System 经 <c>BroadcastMessage</c> 调用。
+        /// <para>本类不需要在这里做任何事，方法体刻意留空——它存在的意义是作为覆写点：
+        /// 子类可在每行对话演完之后插入自己的逻辑（结算、埋点、条件判定等）。</para>
         /// </summary>
         /// <param name="subtitle"></param>
-        private void OnConversationLineEnd(Subtitle subtitle)
+        [Preserve]
+        public virtual void OnConversationLineEnd(Subtitle subtitle)
         {
-            
         }
         #endregion
         
