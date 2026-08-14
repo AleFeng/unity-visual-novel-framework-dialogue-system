@@ -9,6 +9,142 @@
 > `PixelCrushers.DialogueSystem.VnStoryFramework` → `Ale.VnFramework`。脚本 `.meta` 的 GUID 全部保留，
 > 既有场景与预制体的组件引用不受影响。**升级前请先读下方「⚠ 前置条件」。**
 
+## [1.2.0] - 2026-08-14
+
+对整个包做了一次全量扫描（运行时约 3300 行、编辑器约 700 行、包元数据与文档），
+修掉的问题比预期多，**其中几条命中的是主线用例而非边角情况**。
+另新增你点名的 **Addressables 样例条目一键登记**。
+
+**无破坏性变更**，公开 API 与剧本配置格式均未改动。
+
+### 新增
+
+- **欢迎窗口新增「演示样例」区块：一键把样例文件夹登记进 Addressables**，
+  地址自动设为固定短名 `VNFrameworkDemo`，替代此前写在 README 里的手工拖拽步骤。
+  - **幂等**：已登记且地址正确时只报告现状、不动配置（实测：点击前后 `AddressableAssetSettings.asset`
+    与分组资产的 MD5 完全一致）。
+  - **写入前弹确认框**。`com.ale.toolkit` 的既定策略是「绝不改写使用者的 Addressables 配置」，
+    本按钮是这套生态里第一个写入方，因此必须让使用者明确点头。
+  - 样例路径**靠枚举获得而非按版本号拼接**——落地路径盖的是**导入当时**的包版本，
+    与升级后的 `package.json` 不是一回事（本仓库就正好是 `…/1.0.0/…` 而包已是 1.1.0）。
+    「未导入」与「多版本并存」两种情况都会明确报出。
+  - 预扫描出此前被**单独**登记过的资源：它们会被文件夹条目静默跳过、保留旧地址，
+    不报出来的话使用者只会看到「个别资源加载不到」而毫无线索。
+  - 实现位于独立程序集 `Ale.VnFramework.Addressables.Editor`，经静态 `Action` 钩子注入欢迎窗口；
+    **核心编辑器程序集对 Addressables 零引用**，宏关闭时整块界面自动消失。
+    除 `ATK_ADDRESSABLE` 外另加一道由 `versionDefines` 推出的 `VNS_HAS_ADDRESSABLES`——
+    前者是手工宏，光有它不能证明包装了。
+- **`Third Party Notices.md`**：逐项声明 `Samples~` 内的第三方内容
+  （Cartoon FX Remaster、Spine 骨骼数据）与前置依赖 Dialogue System 各自的许可。
+  `LICENSE.md` 的 MIT 只覆盖本包自己的代码与文档。
+- `VnFrameworkDefineChecker` 增加**宏与运行时的一致性告警**：
+  `VNS_FS_GAMEFRAMEWORK` 开着但 Fs 音频系统缺席时给出可读提示，
+  而不是让使用者直接吃 `FsVnAudioBackend.cs` 的一堆 `CS0246`。
+
+### 修复
+
+**这三条是必现的，且都在主线路径上：**
+
+- **剧情自然播完后，再播任何一段都是静默空操作。** `StartVnStory` 整个方法被
+  `_isVnStoryStarted` 早退守卫罩着，而该标记只由 `StopVnStory` 清除——自然结束走不到那里
+  （`VnStoryPlayer.Stop` 因 `IsConversationActive` 已为 false 而早退，其结束回调也只翻自己的 `IsPlaying`）。
+  现把「会话级淡入」与「启动对话」拆开：前者仍幂等，后者不再被吞掉。
+- **`FadeOutUI` 的兜底分支必然 NRE。** 该分支的前提就是 `uiCanvasGroup` 为空，却又去解引用它；
+  且异常发生在 `onComplete` 之前，`StopStoryConversation` 因此永远执行不到、对话停不下来。
+  改为关闭 `GraphicRaycaster`（`blocksRaycasts` 的对应物）而不是 `SetActive(false)`——
+  同方法上方已注明 Dialogue System 需要 `uiCanvas` 保持激活。并补上两者皆空时缺失的回调。
+- **`ClearAllBGM` 用错了后端原语。** BGM 由 `PlayWithChannel` 按通道播出，这里却用 Key 路径的
+  `Stop` 去停。任何合规的 `IVnAudioBackend` 实现都找不到那个 Key，**BGM 会在对话结束后继续播**。
+  内置的空后端掩盖了它，接入真实后端才会暴露。
+
+**资源与生命周期：**
+
+- **`SetBackgroundImageCoroutine` 的两条 `yield break` 快路径跳过了上一张背景的卸载**，
+  而下次换背景会覆写 `_backgroundAssetNameLast`，那个地址的句柄再也放不掉——
+  `backgroundFadeDuration` 设 0 时**每换一次背景漏一个**。头像的失败分支同形。
+  现把卸载移进 `try/finally`，正常结束、每条 `yield break`、外部 `StopCoroutine` 全部覆盖。
+- **背景加载的迟到回调会让「最后完成的」而不是「最后请求的」胜出**，快进时画面停在中间某一张。
+  回调改为携带发起时的地址，与当前地址不符即释放并丢弃。背景协程同时改为持句柄、启动新的之前先停旧的。
+- **`Sprite.Create` 产生的运行时 Sprite 从未销毁**（`UnloadAsset` 释放的只是背后的纹理句柄），
+  每换一次头像 / 背景各泄漏一个。现以地址为键登记，在释放纹理之前销毁——
+  顺序不能反，且早一步销毁会让交叉淡出中的旧图凭空消失。
+  两处 `Sprite.Create` 合并为一个 `ResolveSprite`，顺带修掉背景那处把 pivot 传成**像素中心**的错误
+  （该参数是相对 rect 归一化的；此路径当前不可达，属潜在缺陷）。
+- **`ClearAllActors` 抵消了它自己刚触发的优雅销毁**：紧随 `UnloadActorPrefab` 的第二个循环
+  把所有实例同帧 `Destroy`，Spine 淡出与在途粒子的延迟回收全部作废。已删除该循环。
+- **`OnDestroy` 补 `Lua.UnregisterFunction`。** Dialogue System 的 `RegisterFunction` **不是覆盖语义**
+  （实测：不反注册时第二次注册被忽略、旧绑定保留），不反注册会让下一个实例的注册失效，
+  剧本里的 `BackgroundFadeDuration()` 从此驱动已销毁的对象。
+- **`VnStoryAudio` 与 `NullVnAudioBackend` 的静态字段补 `SubsystemRegistration` 重置。**
+  关闭「Reload Domain」后它们会跨播放会话存活，且残留的后端会让 `FsVnAudioBackend.Install`
+  的自动注册**永久跳过**。
+- **`VnActorAnimator.MarkActorReady` 不可重入**：排空队列用的是实例暂存表，
+  而挂起操作可以合法地同步触发重入，重入会 `Clear` 掉外层正在枚举的同一张表。改为摘表到局部。
+- `ExecuteInit` 在动画播放器未激活时不再留下**永不排空**的待办闭包（此前逐行对话无限堆积）。
+- **玩法系统与变量 getter 的回调改为先快照再遍历**：回调是宿主代码，在其中注册 / 反注册
+  会当场抛 `InvalidOperationException`——对「小游戏结束后登记后续处理器」这类用法太自然了。
+- `VnStoryPlayer` 的结束事件**校验对话名**（`conversationEnded` 对任何对话都触发，
+  别人结束会误清本组件的 `IsPlaying` 并误发 `onPlayEnded`）；`Play` 补重入守卫。
+- `FsVnAudioBackend` 补 `AudioManager` 空值守卫，兑现接缝「不报错、不出声、不抛异常」的契约。
+
+**数值解析（影响所有非英语区域的使用者）：**
+
+- **剧本里的全部数值改用 `CultureInfo.InvariantCulture` 解析。** 此前 18 处 `float.TryParse`
+  都不带 `IFormatProvider`，跟随运行机器的区域设置。实测两种失败模式：
+  **de-DE / pt-BR 下 `"1.5"` 会解析成 `15`（`.` 是千位分隔符）且 `TryParse` 返回 `true`**，
+  ru-RU / fr-FR 下解析失败得 `0`。前者更隐蔽——配 `x=1.5` 的角色会跑到 `x=15`，
+  而任何「检查返回值」的防御都拦不住。
+- **解析失败不再冲掉默认值。** `float.TryParse` 失败会把 out 参数写成 `0`，把调用方预设的哨兵 `-1`
+  抹掉，于是「配错了」与「配了 0」变得无法区分。
+- **音量 / 音调的判据由 `<= 0` 改为 `< 0`**（哨兵本就是 `-1`）。此前 `音量=0`（本意静音）
+  会被当成未配置而放成满音量；负音调（倒放）也表达不出来。
+- **位移 / 旋转 / 缩放的时长补除零与 NaN 守卫。** 速度为 0 得 `Infinity`（补间永不完成）；
+  已在目标点且速度为 0 得 `NaN`，而 `ToolkitTween` 只挡 `duration <= 0`，
+  **`NaN <= 0` 为 `false`**，NaN 会一路写进 `transform` 污染整条子层级。
+
+**编辑器：**
+
+- **`Ale.VnFramework.Editor.asmdef` 删掉零引用的 `Ale.VnFramework` 与 `Ale.Toolkit.Runtime`。**
+  这条引用是**反向承重**的：Dialogue System 没补 asmdef 时运行时程序集编译失败，
+  Unity 连带跳过编辑器程序集 → 菜单项消失 → 使用者**恰好在最需要的时候**看不到那句
+  「怎么补 asmdef」的说明。本次性价比最高的一处改动。
+- **文档按钮改用 `PackageInfo.resolvedPath` 解析路径。** 此前用的
+  `Path.GetFullPath("Packages/com.ale.vnframework/…")` 是纯 .NET 字符串拼接，只有**内嵌包**才碰巧成立；
+  经 git URL 安装时包位于 `Library/PackageCache/…@<hash>/`，三个文档按钮**全部**弹「文档未找到」。
+- 删除指向不存在目录、恒返回 `null` 的 Logo 读取代码（整块从未渲染过任何东西）。
+- 补两个此前只因隔壁包共用全局译表而「看起来正常」的 L10n 键——干净工程里只装 toolkit + 本包会回落中文。
+- 修 `_pendingRecompile` 在 Layout / Repaint 之间控件数错配导致的 `ArgumentException`。
+
+### 变更
+
+- `Ale.VnFramework.asmdef` 移除已无引用的 `Unity.TextMeshPro`（1.1.0 已清空包内的 TMP 专属类型）。
+  **`Fs.Utility` 保留**——`AudioManager.Instance` 是继承自其中 `MonoBehaviourSingleton<T>` 的成员，
+  宏开启时编译器需要该程序集才看得见它。
+- 四个字符串参数解析器改为 `static`（它们不触碰任何实例状态）。
+- 删除样例中不应随包发布的 `Data/StoryDatabase (Auto-Backup).asset`（Dialogue System 的自动备份）。
+- 文档同步：根 README 的固定版本示例跟进到当前 tag、登记说明改为指向欢迎窗口按钮（保留手工兜底）；
+  订正包内 README 中「唯一程序集（无编辑器代码）」与同段落下方并列的 `Editor/` 自相矛盾。
+
+### 评估后决定不做
+
+- **压缩 `Docs~` 下的 65 张截图。** 无损再压确实可行（34.02 → 29.04 MB，省 14.6%，
+  65 张全部通过对照 git HEAD 的逐像素校验），但**提交它是负收益**：git 保留每个版本、旧 blob 不会消失，
+  于是 `clone` 与 UPM 安装要**多下约 29 MB**，只换来工作区少 5 MB——而「减小下载量」正是这件事的初衷。
+  唯一有效的做法是重写历史，那已另行决定不做。
+  - 附带两条实测结论，供日后参考：**降尺寸不是省体积的办法**——缩到 1920px 反而**变大**到 31.46 MB，
+    重采样把截图里大片纯色块变成渐变，破坏了 PNG 最擅长压的游程结构；
+    这些截图颜色数远超 256，无损调色板转换用不上，只剩 deflate 层面的收益。
+
+### 已知限制（1.2.0 现状）
+
+- **默认仍不接任何音频后端**：`VnStoryAudio.Backend` 默认是 `NullVnAudioBackend`，剧情全程无声。
+  音频系统本就该独立，本包只提供开放接口（`IVnAudioBackend` 四个方法）由第三方对接。
+- **暂无一键 Demo 向导**（欢迎窗口已就位）。
+- 每行对话约 45 次 `Field.LookupValue`，每次都是带闭包的线性扫描；热路径上另有无条件 `Debug.Log`。
+  收敛这两条需要穿透十几个方法的重构，等有实测的性能问题再动。
+- `VnActorAnimator` 的单条动画播放与换装接口只能从 C# 调用，尚无对应的剧本字段标题。
+- 循环环境音每行对话都会被 `ClearAllSfx` 停掉，需要每行重复声明。
+
 ## [1.1.0] - 2026-08-14
 
 把两个宏归一到 Ale Toolkit，并修掉一个会让资源地址「永久失效」的缓存缺陷。
@@ -166,6 +302,7 @@ Dialogue System 默认没有 asmdef、其代码正落在 `Assembly-CSharp` 里�
 - **默认不接任何音频后端**：`VnStoryAudio.Backend` 默认为 `NullVnAudioBackend`，
   四个播放 / 停止接口是空操作，剧情全程无声。接入自己的音频系统见 README「音频接缝」；
   内置的 Fs 后端还需在 Fs 的音频系统中配置好 `AudioLibrary` 才会真正出声。
-- **启用 `ATK_ADDRESSABLE` 时，导入后的样例文件夹需自行加入 Addressables 分组**。
-  本包无法替使用者写入其工程的 Addressables 配置。（1.1.0 起条目地址改用固定短名 `VNFrameworkDemo`。）
+- ~~**启用 `ATK_ADDRESSABLE` 时，导入后的样例文件夹需自行加入 Addressables 分组**。
+  本包无法替使用者写入其工程的 Addressables 配置。（1.1.0 起条目地址改用固定短名 `VNFrameworkDemo`。）~~
+  **（已在 1.2.0 解决：欢迎窗口提供一键登记）**
 - **暂无一键 Demo 向导**（欢迎窗口已就位）。
