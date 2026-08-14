@@ -863,6 +863,19 @@ namespace Ale.VnFramework
         private bool _continueButtonisActive = true;
         
         /// <summary>
+        /// 是否正在加载演出资源。
+        ///
+        /// <para>自动播放与快进必须看这个门：它为 true 时继续按钮是被藏起来的，
+        /// 语义就是「资源还没到位，别往下翻」。绕过按钮直接调 <c>OnContinueConversation()</c>
+        /// 的话，这道守卫就作废了，会跳过尚未加载完的演出。</para>
+        ///
+        /// <para>⚠️ 未开启 <c>ATK_ADDRESSABLE</c> 的直接模式下 <c>ToolkitAssets</c> 是同步回调，
+        /// 计数器在 <c>LoadAsset</c> 返回前就已清空，本属性实际恒为 false——
+        /// 也就是说这道门<b>在直接模式下测不出来</b>，接上异步 Addressables 后端后要重新验证。</para>
+        /// </summary>
+        public bool IsLoadingAssets => !_continueButtonisActive;
+
+        /// <summary>
         /// 设置 继续按钮 激活状态
         /// </summary>
         /// <param name="active"></param>
@@ -949,6 +962,20 @@ namespace Ale.VnFramework
                 tw.charactersPerSecond = cps;
                 tw.fullPauseDuration = entry.FullPauseBase / rate;
                 tw.quarterPauseDuration = entry.QuarterPauseBase / rate;
+            }
+        }
+
+        /// <summary>
+        /// 立刻停掉所有字幕打字机，把本行文本一次显示完（等价于玩家点了一下「跳到全显」）。
+        ///
+        /// <para>进入快进时调用：这样字速就永远只在「没有行正在打字」时被改写，
+        /// 避开 DS 打字循环中途变速的跳字与顿挫。详见 <see cref="RefreshTypewriterSpeed"/>。</para>
+        /// </summary>
+        public void StopAllTypewriters()
+        {
+            foreach (var entry in _dialogueTypewriters)
+            {
+                if (entry.Typewriter && entry.Typewriter.isPlaying) entry.Typewriter.Stop();
             }
         }
 
