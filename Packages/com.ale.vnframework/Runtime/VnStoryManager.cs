@@ -123,6 +123,12 @@ namespace Ale.VnFramework
         #endregion
 
         #region 存档接口
+        /// <summary>
+        /// 对话 UI 所在的画布。<see cref="VnUiHider"/> 靠它实现「隐藏所有 UI」。
+        /// <para>⚠️ 只读暴露：Dialogue System 要求这块画布的 GameObject 保持激活，不要去 <c>SetActive(false)</c>。</para>
+        /// </summary>
+        public Canvas UiCanvas => uiCanvas;
+
         /// <summary>播放控制组件。挂在本物体上，没挂时为 null（配置部分的存档会被跳过）。</summary>
         public VnPlaybackController Playback => _playback ? _playback : (_playback = GetComponent<VnPlaybackController>());
         private VnPlaybackController _playback;

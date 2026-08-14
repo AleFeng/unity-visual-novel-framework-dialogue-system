@@ -334,6 +334,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 125852, guid: 58ac37417e60e534f91138088a3e6f70, type: 3}
       insertIndex: -1
       addedObject: {fileID: 7034554479554405432}
+    - targetCorrespondingSourceObject: {fileID: 125852, guid: 58ac37417e60e534f91138088a3e6f70, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 991698653840573476}
     - targetCorrespondingSourceObject: {fileID: 125850, guid: 58ac37417e60e534f91138088a3e6f70, type: 3}
       insertIndex: -1
       addedObject: {fileID: 5282501167173899920}
@@ -448,6 +451,20 @@ MonoBehaviour:
   defaultSpeedTier: 1
   fastForwardRate: 5
   stopOnUnreadDefaultOn: 1
+--- !u!114 &991698653840573476
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7320663833178550963}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b1ce11e438387e540840893bda8a51b4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Ale.VnFramework::Ale.VnFramework.VnUiHider
+  extraCanvases: []
+  catcherSortingOrder: 32767
 --- !u!1 &7320663833178550965 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 125850, guid: 58ac37417e60e534f91138088a3e6f70, type: 3}

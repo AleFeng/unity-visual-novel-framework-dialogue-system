@@ -79,6 +79,7 @@ namespace Ale.VnFramework
 
         private Coroutine _advanceRoutine;
         private bool _isResponseMenuOpen;
+        private bool _isUiHidden;
         private bool _subscribed;
 
         /// <summary>自动播放开关。默认关闭。</summary>
@@ -306,6 +307,18 @@ namespace Ale.VnFramework
         /// <summary>主动广播一次状态变更，让按钮刷新图标。读档 / 重置之后由调用方调用。</summary>
         public void NotifyStateChanged() => RaiseStateChanged();
 
+        /// <summary>
+        /// 由 <see cref="VnUiHider"/> 告知界面已隐藏 / 已恢复。
+        /// 隐藏期间暂停自动推进——玩家藏起 UI 是为了看画面，这时候把台词翻过去就白藏了。
+        /// </summary>
+        public void SetUiHidden(bool hidden)
+        {
+            if (_isUiHidden == hidden) return;
+            _isUiHidden = hidden;
+            if (hidden) ForceStopFastForward();
+            RefreshAdvanceWatcher();
+        }
+
         #endregion
 
         #region 倍率合成
@@ -434,6 +447,7 @@ namespace Ale.VnFramework
             if (!isActiveAndEnabled) return;
             if (!ShouldWatch) return;
             if (_isResponseMenuOpen) return;
+            if (_isUiHidden) return;
             if (!DialogueManager.isConversationActive) return;
 
             _advanceRoutine = StartCoroutine(CorAutoAdvance());
@@ -516,6 +530,7 @@ namespace Ale.VnFramework
         {
             if (!ShouldWatch) return false;
             if (_isResponseMenuOpen) return false;
+            if (_isUiHidden) return false;
             if (!DialogueManager.isConversationActive) return false;
 
             // DS 认定「本行已展示、正在等继续」的唯一权威信号。它同时也天然防重入：
