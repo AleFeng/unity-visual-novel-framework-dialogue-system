@@ -801,6 +801,8 @@ namespace Ale.VnFramework
         private string _dialogueHeadAssetName;
         // 上一个对话头像资源地址（用于卸载）
         private string _dialogueHeadAssetNameLast;
+        // 当前头像**绑到了哪个 actor**。去重判据必须连它一起比——见 SetDialogueHeadImage 的说明。
+        private string _dialogueHeadActorName;
         
         /// <summary>
         /// 设置 对话 头像图像
@@ -826,18 +828,31 @@ namespace Ale.VnFramework
                 }
                 // 清空 当前头像地址
                 _dialogueHeadAssetName = null;
+                _dialogueHeadActorName = null;
                 // 通过 DialogueManager 将 头像图片 绑定到 actor 的 portrait（持久生效）
                 DialogueManager.instance.SetActorPortraitSprite(actorName, null);
                 return;
             }
-            
-            // 记录上一个头像地址，构造当前的资源地址（如果使用Addressables会加上路径和扩展名）
-            _dialogueHeadAssetNameLast = _dialogueHeadAssetName;
+
+            // 先构造地址再比对——比对必须发生在覆写 _dialogueHeadAssetNameLast 之前。
 #if ATK_ADDRESSABLE
-            _dialogueHeadAssetName = $"{dialogueHeadAddressableFolder}{headImageName}{dialogueHeadExtension}";
+            var newAddress = $"{dialogueHeadAddressableFolder}{headImageName}{dialogueHeadExtension}";
 #else
-            _dialogueHeadAssetName = headImageName;
+            var newAddress = headImageName;
 #endif
+
+            // 同一张头像 + 同一个角色：无事可做，直接返回。连续几行同一个人说话是最常见的写法。
+            //
+            // ⚠️ **必须连 actorName 一起比，只比地址会漏绑。**
+            // SetActorPortraitSprite 是按 actor 绑定的：同一张图给另一个角色时仍然要重新绑一次，
+            // 否则那个角色的头像就一直是空的。这是本条守卫最容易写错的地方。
+            if (string.Equals(newAddress, _dialogueHeadAssetName) &&
+                string.Equals(actorName, _dialogueHeadActorName)) return;
+
+            // 记录上一个头像地址，切到当前的资源地址（如果使用Addressables会加上路径和扩展名）
+            _dialogueHeadAssetNameLast = _dialogueHeadAssetName;
+            _dialogueHeadAssetName = newAddress;
+            _dialogueHeadActorName = actorName;
             LogVerbose($"剧情演出 >> 设置对话头像为 '{_dialogueHeadAssetName}'。");
 
             // 加载 头像图片
@@ -885,6 +900,8 @@ namespace Ale.VnFramework
                 UnloadAsset(_dialogueHeadAssetName);
                 _dialogueHeadAssetName = null;
             }
+            // 绑定记录一并清掉，否则清完之后再设同一张头像会被去重守卫误判为「已是当前」而不加载
+            _dialogueHeadActorName = null;
         }
         #endregion
         #endregion
@@ -1094,17 +1111,29 @@ namespace Ale.VnFramework
         {
             if (string.IsNullOrEmpty(backgroundName) || string.Equals(backgroundName, "nil")) return;
 
+            // 先构造地址再比对——比对必须发生在覆写 _backgroundAssetNameLast 之前，否则「上一张」会被写坏。
+#if ATK_ADDRESSABLE
+            // 使用Addressables时，添加文件夹路径
+            var newAddress = $"{backgroundAddressableFolder}{backgroundName}{backgroundAddressableExtension}";
+#else
+            var newAddress = backgroundName;
+#endif
+
+            // 已经是这张背景：直接返回。连续几行配同一张背景是很常见的写法，
+            // 不拦的话每行都会重走一遍「加载 → 计数增减 → 重启协程 → 对自己做一次交叉淡入」。
+            //
+            // ⚠️ 必须同时确认没有待触发的清理：ClearAllBackground 是**延时**执行的
+            // （延时等于 backgroundFadeDuration）。若在那个窗口内又请求同一张背景就直接早退，
+            // 稍后清理照样落下来，画面上背景就没了。此时不能早退，要正经重新走一遍。
+            if (!_tweenClearAllBackground.IsActive && string.Equals(newAddress, _backgroundAssetName)) return;
+
             // 记录上个背景图像名称
             _backgroundAssetNameLast = _backgroundAssetName;
             // 记录背景图像名称
-            _backgroundAssetName = backgroundName;
-#if ATK_ADDRESSABLE
-            // 使用Addressables时，添加文件夹路径
-            _backgroundAssetName = $"{backgroundAddressableFolder}{backgroundName}{backgroundAddressableExtension}";
-#endif
+            _backgroundAssetName = newAddress;
             // 日志输出
             LogVerbose($"剧情演出 >> 设置背景图像为 '{_backgroundAssetName}'。");
-            
+
             // 加载图像资源。把本次请求的地址一并带进回调：加载是异步的，回来时可能已经不是当前背景了。
             var requestedAddress = _backgroundAssetName;
             LoadAsset<Sprite>(requestedAddress, asset => OnBackgroundAssetLoaded(asset, requestedAddress));
