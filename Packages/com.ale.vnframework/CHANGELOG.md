@@ -71,12 +71,12 @@
 - 若你在自有代码里覆写过 `VnResponseButton`，注意 `stateTxtArray` 的类型已由
   `TextMeshProUGUI[]` / `Text[]` 变为 `Graphic[]`。
 
-### 已知限制
+### 依赖要求
 
-- **`com.ale.toolkit` 的 `AddressableManager` 存在同类缺陷，位于本包下一层**：加载失败的条目会以
-  `Done = true, Result = null` 长驻其静态表，此后同地址的请求都被它直接短路回 `null`，
-  **不再真正重发 Addressables 请求、也不再报警告**。本包侧的毒化已在本版本修掉
-  （不再缓存 null、不再污染引用计数），但**端到端的重试仍受该层影响**，需在 toolkit 侧一并修复。
+- **`com.ale.toolkit` 需 ≥ 1.7.10。** 本次的加载重试要端到端成立，还依赖 toolkit 侧的同类修复：
+  1.7.10 之前的 `AddressableManager` 会把加载失败的条目以 `Done = true, Result = null`
+  长驻静态表，把同地址的后续请求直接短路回 `null`——本包这一层修好了，请求也到不了 Addressables。
+  两侧都修好后，失败地址才真正可重试（已实测）。
 
 ## [1.0.0] - 2026-08-13
 

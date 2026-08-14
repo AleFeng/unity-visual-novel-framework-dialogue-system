@@ -98,8 +98,10 @@ Dialogue System 把「说什么、跳到哪」解决得很好，但「这句话�
 - `Unity 2022.3` 或更新版本（`package.json` 声明的最低版本；本仓库基于 `Unity 6000.3` 开发与维护）。
 - **Pixel Crushers Dialogue System**（Asset Store 付费资产，必需）——并且**必须先为它补上 Assembly
   Definitions**，见下节。
-- 通用底层 [`com.ale.toolkit`](https://github.com/AleFeng/unity-ale-toolkit) 与动画系统
-  [`com.ale.animsimulatorsystem`](https://github.com/AleFeng/unity-ale-anim-simulator)，均需**先装**。
+- 通用底层 [`com.ale.toolkit`](https://github.com/AleFeng/unity-ale-toolkit) **≥ 1.7.10** 与动画系统
+  [`com.ale.animsimulatorsystem`](https://github.com/AleFeng/unity-ale-anim-simulator) **≥ 2.6.0**，均需**先装**。
+  - toolkit 的下限是 1.7.10：更早的版本会把加载失败的 Addressable 条目长驻静态表，
+    使该地址此后无法重试——本插件 1.1.0 修好了自己这一层，但请求仍到不了 Addressables。
 - TextMeshPro / Unity Localization / Addressables 通过编译宏**可选**启用（见[可选宏开关](#-可选宏开关)）。
 
 ## 📦 安装
@@ -123,8 +125,8 @@ Pixel Crushers 官方提供了 asmdef 方案（见其 `Dialogue System/Scripts/_
 
 ### 使用 UPM（推荐）
 
-> ⚠️ **本插件依赖 [`com.ale.toolkit`](https://github.com/AleFeng/unity-ale-toolkit) 与
-> [`com.ale.animsimulatorsystem`](https://github.com/AleFeng/unity-ale-anim-simulator)，必须先装它们、
+> ⚠️ **本插件依赖 [`com.ale.toolkit`](https://github.com/AleFeng/unity-ale-toolkit) ≥ 1.7.10 与
+> [`com.ale.animsimulatorsystem`](https://github.com/AleFeng/unity-ale-anim-simulator) ≥ 2.6.0，必须先装它们、
 > 再装本插件。** Unity Package Manager 不支持在 `package.json` 的 `dependencies` 里写 git URL，
 > 无法自动拉取，故**顺序不能颠倒**：`com.ale.toolkit` → `com.ale.animsimulatorsystem` → 本插件。
 > 漏装或颠倒会报 `找不到 Ale.Toolkit.*` / `Ale.AnimSimulatorSystem` 一类编译错——补装并等重新编译即可，
@@ -311,9 +313,7 @@ Packages/com.ale.vnframework/        ← 包根
   但仍缺一套不依赖 `com.fs.gameframework` 的现成音频管理器。
 - 一键 Demo 向导（欢迎窗口已就位，向导尚未做）。
 - 样例资源的地址前缀改为随样例自动适配，免去手工订正。
-- `com.ale.toolkit` 的 `AddressableManager` 会把**加载失败的条目**留在静态表里
-  （`Done=true, Result=null`），导致同一地址此后不再真正重试加载。本插件侧已于 1.1.0 修掉同类问题，
-  但端到端重试仍受该层影响。
+- Addressables 条目的一键登记（目前需使用者手工把样例文件夹拖进分组并改地址为 `VNFrameworkDemo`）。
 
 ## 📄 许可
 本项目基于 [MIT License](LICENSE) 开源，可自由用于商业与非商业项目。
