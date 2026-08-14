@@ -186,6 +186,109 @@ VnStoryManager.Instance.SetAllVariablesToDialogueSystem();
 
 ---
 
+## 条件系统
+
+对话节点的 **Conditions** 决定「能不能进这个节点」。除了手写 Lua（如 `Variable["选项序号"] == 1`），
+本包还把 **Ale Toolkit 条件系统**的判定器接了进来：任何系统只要实现了判定器，就会**自动出现**在
+节点的 Conditions 配置里，不需要改本包一行代码，也不需要改 Dialogue System 一行代码。
+
+### 三步接入
+
+**1. 生成登记资产**（每个工程一次）——菜单
+`Tools ▸ Ale Toolkit ▸ VN Framework ▸ Generate Condition Lua Functions`，
+会在 `Assets/AleVnFramework/` 下建一份 `VnFrameworkConditionLuaFunctions.asset`。
+
+> 为什么非要有它：Dialogue System 的条件向导枚举可选函数走的是**扫描工程内的
+> `CustomLuaFunctionInfo` 资产**，它**不读 Lua 环境**——没有这份资产，判定器一个都不会出现在下拉里。
+>
+> 建好之后不用再管：此后判定器增减，资产会在**脚本重编译时自动同步**（内容无变化则一个字节都不写）。
+
+**2. 接线数据源**（宿主侧）：
+
+```csharp
+void OnEnable()
+{
+    VnConditionSources.RegisterNumber("时间段", () => timeSystem.CurrentHour);
+    VnConditionSources.RegisterFlag("已见过面", () => flags.Has("met"));
+}
+
+void OnDisable()
+{
+    VnConditionSources.UnregisterNumber("时间段");
+    VnConditionSources.UnregisterFlag("已见过面");
+}
+```
+
+**3. 在节点上配置**：Conditions 右侧点 `...` 打开向导 → 条件类型选 **Custom** →
+在 `Ale 条件` 分组里挑判定器 → 填参数。生成的表达式形如：
+
+```lua
+AleCond_Condition_NumberCompare("时间段", "大于等于", 3) == true
+```
+
+> ⚠️ 向导只在**打开的那一刻**扫一次资产。新判定器没出现的话，把向导关掉重开。
+
+### 两条必须知道的语义
+
+**① 数值 / 标记只来自宿主的实时 getter，不读 Dialogue System 的 Variable。**
+
+求值当刻才回调宿主，所以**对话中途**宿主的值变了会立刻生效。这一点与
+[`RegisterVariableGetter`](#对外扩展点) 不同——后者只在**每段对话开始时**推一次
+（`SetAllVariablesToDialogueSystem`），对话进行中取到的是旧值。
+
+既有的 `Variable["…"]` 写法完全不受影响，两者可以在同一个表达式里组合：
+
+```lua
+AleCond_Condition_NumberCompare("时间段", "大于等于", 3) == true
+    and Variable["选项序号"] == 1
+```
+
+**② 没接线的 id 一律判「不成立」，并在控制台告警一次。**
+
+取不到数值时返回 `NaN`，于是 `>` `≥` `=` `≤` `<` 五种比较**全部为假**——「忘了接线」表现为
+节点进不去，而不是静默放行（若回落成 `0`，`时间段 ≤ 5` 这类条件会悄悄通过）。
+告警按 id 去重，不会刷屏。
+
+### 命名规则
+
+Lua 函数名 = `AleCond_` + 判定器 Key（非 `[A-Za-z0-9_]` 的字符换成 `_`）：
+
+| 判定器 Key | Lua 函数名 | 向导里的位置 |
+| --- | --- | --- |
+| `Condition.NumberCompare` | `AleCond_Condition_NumberCompare` | `Ale 条件/Condition/…` |
+| `AnimSim.LevelProgress` | `AleCond_AnimSim_LevelProgress` | `Ale 条件/动画模拟器/…` |
+
+> 名字刻意保留**完整的 Key**、也刻意**只用 ASCII**：这些字符串会存进你的对话库，命名规则一旦改动，
+> 已存的条件就会静默失效；而菜单的叶子段同时就是真实的 Lua 标识符（Dialogue System 生成调用时
+> 只取最后一段），中文标识符不值得赌。
+
+### 参数映射
+
+Dialogue System 的参数类型只有 Bool / Double / String / 数据库实体，**没有通用枚举下拉**，故折中如下：
+
+| Toolkit 参数 | 映射为 | 剧本里写成 |
+| --- | --- | --- |
+| `String` | String | `"文本"` |
+| `Float`、无选项的 `Int` | Double | `3` |
+| **带固定选项**的 `Int` / `Enum` | **String（传标签）** | `"大于等于"` |
+| 无选项的 `Enum` | String（成员名） | `"Morning"` |
+| `Bool` | Bool | `true` |
+| 数组 | String（以 `\|` 分隔） | `"a\|b\|c"` |
+
+标签拼错会告警并判不成立，且告警里会列出全部合法选项。也接受直接写数字索引。
+
+### 限制
+
+- **求值是同步的**。Dialogue System 的 `Lua.IsTrue` 没有异步扩展点，判定器里不能等 IO；
+  需要异步取的数据请先算好，再由 getter 返回。
+- **参数不能超过 8 个**，超了会被跳过并告警。Dialogue System 的 Lua 绑定要求实参个数与 C# 方法
+  签名严格一致（不支持变参与默认值），只能按元数逐个准备方法。
+- 因此**别手改剧本里的实参个数**，会抛 `TargetParameterCountException`；增删参数请用向导重新生成。
+- 需要 `com.ale.toolkit` ≥ 1.4.0（本包本就要求 ≥ 1.7.10，正常都满足）。toolkit 若被降级到没有
+  条件系统的版本，本功能连同它的两个程序集一起**静默消失**，不会让工程编译失败。
+
+---
+
 ## UI 样式
 
 样例中的 `DialogueUI_Main` 预制体给出了一整套可直接改的对话 UI：玩家对话面板与配角对话面板、
@@ -229,12 +332,22 @@ com.ale.vnframework/
 │   ├── VnStoryPlayer.cs         播放控制：按对话名启停、自动播放时机
 │   ├── VnActorAnimator.cs       角色动画对接层（→ AnimatorBase，就绪门控）
 │   ├── VnResponseButton.cs      分支选项按钮（已读 / 未读态）
-│   └── Audio/                   可替换的音频后端
-│       ├── IVnAudioBackend.cs   ← 接入自己的音频系统实现这个
-│       ├── EVnAudioCategory     （同文件）Bgm / Ambient / Sfx / Voice
-│       ├── VnStoryAudio.cs      静态门面，持有当前后端
-│       ├── NullVnAudioBackend.cs 默认空实现
-│       └── FsVnAudioBackend.cs  Fs 后端（VNS_FS_GAMEFRAMEWORK 门控，兼作范例）
+│   ├── Audio/                   可替换的音频后端
+│   │   ├── IVnAudioBackend.cs   ← 接入自己的音频系统实现这个
+│   │   ├── EVnAudioCategory     （同文件）Bgm / Ambient / Sfx / Voice
+│   │   ├── VnStoryAudio.cs      静态门面，持有当前后端
+│   │   ├── NullVnAudioBackend.cs 默认空实现
+│   │   └── FsVnAudioBackend.cs  Fs 后端（VNS_FS_GAMEFRAMEWORK 门控，兼作范例）
+│   └── Condition/               Toolkit 条件系统接入（独立程序集，按 toolkit 版本自动门控）
+│       ├── Ale.VnFramework.Condition.asmdef
+│       │                        versionDefines 从 com.ale.toolkit≥1.4.0 推出 VNS_HAS_CONDITION
+│       ├── VnConditionBridge.cs 把判定器注册成 DS 的 Lua 条件函数
+│       │                        ⚠ 必须晚于 SubsystemRegistration：DS 在那个时机会清空
+│       │                        整个 Lua 环境（含已注册函数），故用 BeforeSceneLoad
+│       ├── VnConditionSources.cs ← 宿主在这里接线数值 / 标记 / 领域服务
+│       ├── VnConditionContext.cs 求值上下文；取不到数值时返回 NaN 以「失败即不成立」
+│       ├── VnConditionLuaBinding.cs Eval0..Eval8 一族定长入口 + 参数编组
+│       └── VnConditionNaming.cs 判定器 Key ↔ Lua 函数名，运行时与编辑器共用
 ├── Editor/                      欢迎窗口与编译宏开关
 │   ├── Ale.VnFramework.Editor.asmdef  核心编辑器程序集
 │   │                            ⚠ 刻意不引用 Ale.VnFramework：运行时程序集编译失败时
@@ -248,6 +361,10 @@ com.ale.vnframework/
 │   │   ├── Ale.VnFramework.Addressables.Editor.asmdef
 │   │   │                        ATK_ADDRESSABLE + VNS_HAS_ADDRESSABLES 双重门控
 │   │   └── VnFrameworkDemoAddressables.cs  经静态 Action 钩子注入欢迎窗口
+│   ├── Condition/                    条件函数登记资产的生成与自动同步
+│   │   ├── Ale.VnFramework.Condition.Editor.asmdef
+│   │   └── VnConditionLuaFunctionInfoGenerator.cs
+│   │                            菜单首次创建（征得同意）+ DidReloadScripts 同步
 │   └── L10n/                         编辑器界面的英 / 日译表
 ├── Docs~/                       Unity 不导入（~ 后缀）
 │   ├── Setup/PixelCrushers/     ⚠ Dialogue System 的 asmdef 副本与说明
@@ -277,7 +394,9 @@ com.ale.vnframework/
 > **本章仅供二次开发参考。** 只做剧情配置的话不需要读——演出全部由对话节点上的字段条目驱动，
 > 上面的章节已经够用。这里列的是从 C# 侧调用框架时的公开接口。
 >
-> 全部类型位于命名空间 `Ale.VnFramework`，程序集 `Ale.VnFramework`。
+> 除条件系统外，全部类型位于命名空间 `Ale.VnFramework`，程序集 `Ale.VnFramework`；
+> 条件系统另在命名空间 `Ale.VnFramework.Conditions`、程序集 `Ale.VnFramework.Condition`
+> （独立程序集，按 toolkit 版本自动门控，见 [条件系统](#条件系统)）。
 > 包内**没有任何 C# `event`**，也**没有任何 `[Obsolete]` 成员**。
 > `VnActorAnimator` 与 `VnResponseButton` 的配置项**全是 `[SerializeField] private`**，只能在 Inspector 配。
 
@@ -432,3 +551,74 @@ public sealed class NullVnAudioBackend : IVnAudioBackend  // 单例 NullVnAudioB
 ```
 
 接入方式与注意事项见上文 [音频接缝](#音频接缝)。
+
+### `VnConditionSources`
+
+```csharp
+namespace Ale.VnFramework.Conditions   // 程序集 Ale.VnFramework.Condition
+
+public static class VnConditionSources
+{
+    public static object Subject { get; set; }                       // 透传给 IConditionContext.Subject
+
+    public static void RegisterNumber(string id, Func<double> getter);
+    public static bool UnregisterNumber(string id);                  // 返回是否确有其项
+    public static bool HasNumber(string id);
+
+    public static void RegisterFlag(string id, Func<bool> getter);
+    public static bool UnregisterFlag(string id);
+    public static bool HasFlag(string id);
+
+    public static void RegisterService<T>(T service) where T : class; // 供第三方判定器 ctx.GetService<T>()
+    public static bool UnregisterService<T>() where T : class;
+
+    public static void Clear();                                      // 清空全部注册与 Subject
+}
+```
+
+宿主向条件系统提供实时数据的唯一入口。`getter` 在**每次条件求值时**被调用，因此取到的永远是当前值。
+
+- 重复注册同一 id 会**覆盖并告警**（与 `RegisterGameplaySystem` 同风格）。
+- **未注册的 id 判「不成立」并告警一次**，不会静默放行；详见上文 [条件系统](#条件系统)。
+- 注册的服务**优先于**内置的数值 / 标记源，故 `RegisterService<IConditionNumberSource>(...)`
+  可以整套换掉内置实现。
+- 每次进入播放模式时自动 `Clear()`。关掉「重新加载域」后静态表会跨播放存活，
+  里头的 getter 闭包却捕获着上一轮已销毁的对象——不清就会在下一轮求值时抛异常。
+  **请在 `OnEnable` / `OnDisable` 里成对注册与注销。**
+
+### `VnConditionBridge`
+
+```csharp
+namespace Ale.VnFramework.Conditions
+
+public static class VnConditionBridge
+{
+    public static IReadOnlyList<string> RegisteredFunctionNames { get; }  // 已注册的 Lua 函数名
+    public static void RegisterAll();                                     // 重复调用安全
+    public static void UnregisterAll();
+}
+```
+
+通常**不需要手动调用**：`[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]` 已在每次进入播放时自动注册。
+`RegisteredFunctionNames` 便于自检「某判定器到底接上了没有」。
+
+### `VnConditionNaming`
+
+```csharp
+namespace Ale.VnFramework.Conditions
+
+public static class VnConditionNaming
+{
+    public const string LuaFunctionPrefix = "AleCond_";
+    public const string MenuRoot          = "Ale 条件";
+    public const int    MaxParameterCount = 8;
+
+    public static string ToLuaFunctionName(string evaluatorKey);
+    public static string ToMenuPath(string category, string luaFunctionName);
+    public static bool   TryPlan(IConditionEvaluator evaluator,
+                                 out string luaFunctionName, out int parameterCount, out string skipReason);
+}
+```
+
+命名规则的唯一出处，运行时桥与编辑器生成器共用。一般只在写工具、需要由判定器 Key 反推
+Lua 函数名时才用得到。

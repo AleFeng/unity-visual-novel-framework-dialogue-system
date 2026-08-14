@@ -269,6 +269,7 @@ Tools > Ale Toolkit > VN Framework > Welcome
 | `ATK_ADDRESSABLE` | 资源经 `ToolkitAssets` 走 Addressables，否则回落 `Resources` | 同上 |
 | `VNS_FS_GAMEFRAMEWORK` | 把 `VnStoryAudio` 接到 Fs 的 `AudioManager` | **本包欢迎窗口**的「插件支持」 |
 | `VNS_VERBOSE_LOG` | 让演出流水日志（切头像 / 切背景 / 加载角色）在**发行版**里也输出 | 需要时自行在 Project Settings 添加 |
+| `VNS_HAS_CONDITION` | 启用 [Toolkit 条件系统接入](Packages/com.ale.vnframework/README.md#条件系统)（两个独立程序集） | **不用人写**：`versionDefines` 从 `com.ale.toolkit` ≥ 1.4.0 自动推出 |
 
 > 自 1.1.0 起，本插件**不再使用 `HAS_TMPRO` / `HAS_LOCALIZATION`**。前者由 `com.fs.gameframework`
 > 维护，没装 Fs 的工程里不会被定义、功能会静默关闭；现已改用 Ale Toolkit 的 `ATK_*` 一族
@@ -280,6 +281,10 @@ Tools > Ale Toolkit > VN Framework > Welcome
 > 发行版默认静默（经 `[Conditional]` 在编译期连同插值字符串一起消除，不是运行时判断）。
 > 排查线上问题时再加它。
 >
+> `VNS_HAS_CONDITION` 与 `VNS_HAS_ADDRESSABLES` 同类，**列在这里只为便于排查、不需要也不建议手写**：
+> 它由 asmdef 的 `versionDefines` 依包版本自动推出。toolkit 若降级到没有条件系统的版本，
+> 相关程序集连同功能一起静默消失，工程不会编译失败。
+>
 > 切换宏后需等待 Unity 重新编译生效。
 
 ## 📖 详细文档
@@ -290,6 +295,10 @@ UI 样式定制、运行时 API——请见插件内文档：
 
 二次开发（从 C# 侧调用框架）另见该文档末尾的
 **[API 参考](Packages/com.ale.vnframework/README.md#api-参考)** 章节——只做剧情配置的话不需要读。
+
+想让对话节点的 **Conditions** 用上 Ale Toolkit 的条件判定器（任何系统实现的判定器都会自动出现在
+节点的条件下拉里），见
+**[条件系统](Packages/com.ale.vnframework/README.md#条件系统)** 章节。
 
 - [VnStoryManager 使用文档](Packages/com.ale.vnframework/Docs~/VnStoryManager/VnStoryManager.md) —
   资源配置 / 资源导入 / 剧情演出配置 / UI 样式 / 功能示例的逐项图文说明（含演示视频）
@@ -307,7 +316,9 @@ Packages/com.ale.vnframework/        ← 包根
 │   ├── VnStoryPlayer.cs         播放控制：按对话名启停、自动播放时机
 │   ├── VnActorAnimator.cs       角色动画对接层（→ AnimatorBase，后端无关）
 │   ├── VnResponseButton.cs      分支选项按钮（已读 / 未读态）
-│   └── Audio/                   可替换的音频后端（IVnAudioBackend + 空实现 + Fs 实现）
+│   ├── Audio/                   可替换的音频后端（IVnAudioBackend + 空实现 + Fs 实现）
+│   └── Condition/               Toolkit 条件系统接入：判定器 → DS 的 Lua 条件函数
+│                                （独立程序集，按 toolkit 版本自动门控）
 ├── Editor/
 │   ├── Ale.VnFramework.Editor.asmdef    核心编辑器程序集（对 Addressables 零引用）
 │   ├── VnFrameworkWelcomeWindow.cs   欢迎窗口：前置条件自检 + 插件支持 + 演示样例 + 文档
@@ -315,6 +326,7 @@ Packages/com.ale.vnframework/        ← 包根
 │   ├── VnFrameworkDefineChecker.cs   启动时按需弹窗 + 宏与运行时一致性告警（不改写宏）
 │   ├── VnFrameworkEditorPrefs.cs
 │   ├── Addressables/                 样例条目一键登记（ATK_ADDRESSABLE 门控的独立程序集）
+│   ├── Condition/                    条件函数登记资产的生成与自动同步
 │   └── L10n/                         编辑器界面的英 / 日译表
 ├── Docs~/                       Unity 不导入（~ 后缀）
 │   ├── Setup/PixelCrushers/     ⚠ Dialogue System 的 asmdef 副本与说明
