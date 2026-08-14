@@ -18,9 +18,9 @@ namespace Ale.VnFramework
         private void Reset()
         {
             // 获取 动画播放器。FindFor 取包内三种查找顺序的并集，且含未激活对象
-            if (!m_ActorAnimator)
+            if (!actorAnimator)
             {
-                m_ActorAnimator = AnimatorBase.FindFor(this);
+                actorAnimator = AnimatorBase.FindFor(this);
             }
         }
 #endif
@@ -31,13 +31,13 @@ namespace Ale.VnFramework
             // 状态列表传 null —— 初始状态的唯一来源是动画播放器自身的 StateInitList。
             // 本方法与 AnimatorBase.Start 的先后是未定义的，靠就绪信号消化：
             // 先跑到这里就登记等待，后跑到这里就立即补发。
-            if (m_AutoInit)
+            if (autoInit)
                 ExecuteInit(transform.position, transform.eulerAngles, transform.localScale, null);
         }
 
         #region 初始化、销毁
         [Tooltip("自动初始化")]
-        [SerializeField] private bool m_AutoInit;
+        [SerializeField] private bool autoInit;
 
         // 等待动画播放器就绪期间，暂存的目标状态列表
         private string[] _pendingInitStates;
@@ -70,7 +70,7 @@ namespace Ale.VnFramework
             transform.eulerAngles = toRot;
             transform.localScale = toScale;
 
-            if (!m_ActorAnimator)
+            if (!actorAnimator)
             {
                 // 无动画播放器（例如纯粒子特效）：激活即完成
                 gameObject.SetActive(true);
@@ -81,21 +81,21 @@ namespace Ale.VnFramework
             // 初始状态的唯一来源是 AnimatorBase.StateInitList。在首次激活之前写进去，
             // 它的 Start 就会直接应用这一组——不再「先按预制体配置应用一套、再清掉换成剧情要的那套」。
             // 已经 Start 过的实例写了也无害（没人再读），目标状态由下面的差集切换负责。
-            if (toStateArray != null) m_ActorAnimator.StateInitList = toStateArray;
-            _pendingInitStates = m_ActorAnimator.StateInitList;
+            if (toStateArray != null) actorAnimator.StateInitList = toStateArray;
+            _pendingInitStates = actorAnimator.StateInitList;
 
             // 同一槽位可能被反复 Init，先退掉上一次可能还挂着的订阅
-            m_ActorAnimator.OnInitComplete -= OnAnimatorInitComplete;
+            actorAnimator.OnInitComplete -= OnAnimatorInitComplete;
 
             // 激活对象。首次激活会触发 AnimatorBase 的 Start（Awake 在实例化时就已跑过）
             gameObject.SetActive(true);
 
-            if (!m_ActorAnimator.isActiveAndEnabled)
+            if (!actorAnimator.isActiveAndEnabled)
             {
                 // 动画播放器所在物体仍未激活、或组件被禁用：它的 Start 不会执行，就绪信号本轮不会到。
                 // 不静默——否则角色会「加载成功但永远不出现」，且没有任何线索。
                 int discarded = _pendingReadyActions?.Count ?? 0;
-                Debug.LogWarning($"剧情演出 >> '{name}' 的动画播放器 '{m_ActorAnimator.name}' 未激活，动画初始化被跳过。"
+                Debug.LogWarning($"剧情演出 >> '{name}' 的动画播放器 '{actorAnimator.name}' 未激活，动画初始化被跳过。"
                                  + (discarded > 0 ? $"已丢弃 {discarded} 个挂起的操作。" : string.Empty));
 
                 // 丢弃挂起队列。此前这里既不 MarkActorReady 也不清队列，于是 RunWhenReady 的闭包
@@ -104,13 +104,13 @@ namespace Ale.VnFramework
                 _pendingReadyActions = null;
 
                 // 仍然订阅：对象若在别处被激活，AnimatorBase.Start 会跑，届时还能正常就绪。
-                m_ActorAnimator.OnInitComplete += OnAnimatorInitComplete;
+                actorAnimator.OnInitComplete += OnAnimatorInitComplete;
                 return;
             }
 
             // ① 首次加载：此刻 Start 尚未执行，本行只登记，回调在 Start 末尾触发；
             // ② 同槽位重复 Init：已经就绪，本行内同步立即回调。
-            m_ActorAnimator.OnInitComplete += OnAnimatorInitComplete;
+            actorAnimator.OnInitComplete += OnAnimatorInitComplete;
         }
 
         // 动画播放器 初始化完成
@@ -146,7 +146,7 @@ namespace Ale.VnFramework
         public bool FadeOut()
         {
             bool handled = false;
-            if (m_ActorAnimator)
+            if (actorAnimator)
             {
                 // clearAnimOnFadeOut=false：临时隐藏，保留动画轨道与数据。
                 // 渲染器与动画播放器同体时（Demo 的 Spine 角色即是），基类不会禁用它
@@ -154,12 +154,12 @@ namespace Ale.VnFramework
                 // 渲染器在子物体上而被真禁用时，只要 clearStateOnDisable 为 false，
                 // 后端的播放轨道也原样留存，重新激活后从冻结处继续。
                 // 两种情形下 FadeIn() 都只需把不透明度补回来，不需要「重放动画」这一步。
-                m_ActorAnimator.FadeAnimator(false, null, clearAnimOnFadeOut: false);
+                actorAnimator.FadeAnimator(false, clearAnimOnFadeOut: false);
                 handled = true;
             }
-            if (m_ParticleSystemRoot)
+            if (particleSystemRoot)
             {
-                m_ParticleSystemRoot.Stop();
+                particleSystemRoot.Stop();
                 handled = true;
             }
             return handled;
@@ -177,15 +177,15 @@ namespace Ale.VnFramework
                 gameObject.SetActive(true);
             
             bool handled = false;
-            if (m_ActorAnimator)
+            if (actorAnimator)
             {
                 // 淡入 动画播放器（内部会调用其 gameObject.SetActive(true)）
-                m_ActorAnimator.FadeAnimator(true);
+                actorAnimator.FadeAnimator(true);
                 handled = true;
             }
-            if (m_ParticleSystemRoot)
+            if (particleSystemRoot)
             {
-                m_ParticleSystemRoot.Play();
+                particleSystemRoot.Play();
                 handled = true;
             }
             return handled;
@@ -210,7 +210,7 @@ namespace Ale.VnFramework
             bool hasDelay = false;
             float maxDelay = 0f;
             // 销毁 动画播放器
-            if (m_ActorAnimator && m_ActorAnimator.DestroyAnim(out var delayAnim))
+            if (actorAnimator && actorAnimator.DestroyAnim(out var delayAnim))
             {
                 hasDelay = true;
                 maxDelay = Mathf.Max(maxDelay, delayAnim);
@@ -230,7 +230,7 @@ namespace Ale.VnFramework
                 VnTween.DelayedCall(maxDelay, () =>
                 {
                     // 销毁对象
-                    if (this != null && gameObject) Destroy(gameObject);
+                    if (this && gameObject) Destroy(gameObject);
                     // 调用回调
                     onComplete?.Invoke();
                 }, unscaled: false);
@@ -238,7 +238,7 @@ namespace Ale.VnFramework
             else
             {
                 // 销毁对象
-                if (this != null && gameObject) Destroy(gameObject);
+                if (this && gameObject) Destroy(gameObject);
                 // 调用回调
                 onComplete?.Invoke();
             }
@@ -289,17 +289,17 @@ namespace Ale.VnFramework
         #region 参数设置。位置、缩放、速度等
         [Header("参数设置。位置、缩放、速度等")]
         [Tooltip("角色移动 速度（米/秒）")]
-        [SerializeField] private float m_ActorPosSpeed = 3.5f;
+        [SerializeField] private float actorPosSpeed = 3.5f;
         [Tooltip("角色移动 过渡类型")]
-        [SerializeField] private EToolkitEase m_ActorPosEase = EToolkitEase.InOutQuad;
+        [SerializeField] private EToolkitEase actorPosEase = EToolkitEase.InOutQuad;
         [Tooltip("角色旋转 速度（度/秒）")]
-        [SerializeField] private float m_ActorRotateSpeed = 360f;
+        [SerializeField] private float actorRotateSpeed = 360f;
         [Tooltip("角色旋转 过渡类型")]
-        [SerializeField] private EToolkitEase m_ActorRotateEase = EToolkitEase.InOutQuad;
+        [SerializeField] private EToolkitEase actorRotateEase = EToolkitEase.InOutQuad;
         [Tooltip("角色缩放 速度（1.0=100%/秒）")]
-        [SerializeField] private float m_ActorScaleSpeed = 1.5f;
+        [SerializeField] private float actorScaleSpeed = 1.5f;
         [Tooltip("角色移动 过渡类型")]
-        [SerializeField] private EToolkitEase m_ActorScaleEase = EToolkitEase.InOutQuad;
+        [SerializeField] private EToolkitEase actorScaleEase = EToolkitEase.InOutQuad;
 
         /// <summary>
         /// 立刻完成 当前的移动、旋转和缩放动画
@@ -327,9 +327,9 @@ namespace Ale.VnFramework
             }
             
             // 计算过渡时间
-            float duration = SafeDuration((targetPos - transform.position).magnitude, m_ActorPosSpeed, speedRate);
+            float duration = SafeDuration((targetPos - transform.position).magnitude, actorPosSpeed, speedRate);
             // 位置。平滑过渡
-            VnTween.MoveTransform(transform, targetPos, duration, m_ActorPosEase, unscaled: false);
+            VnTween.MoveTransform(transform, targetPos, duration, actorPosEase, unscaled: false);
         }
         
         /// <summary>
@@ -350,9 +350,9 @@ namespace Ale.VnFramework
             
             // 计算过渡时间
             float angleDiff = Quaternion.Angle(Quaternion.Euler(transform.eulerAngles), Quaternion.Euler(targetRot));
-            float duration = SafeDuration(angleDiff, m_ActorRotateSpeed, speedRate);
+            float duration = SafeDuration(angleDiff, actorRotateSpeed, speedRate);
             // 旋转。平滑过渡。逐轴走最短弧，与上面按 Quaternion.Angle 算出的时长一致
-            VnTween.RotateTransform(transform, targetRot, duration, m_ActorRotateEase, unscaled: false);
+            VnTween.RotateTransform(transform, targetRot, duration, actorRotateEase, unscaled: false);
         }
         
         /// <summary>
@@ -372,9 +372,9 @@ namespace Ale.VnFramework
             }
             
             // 计算过渡时间
-            float duration = SafeDuration((targetScale - transform.localScale).magnitude, m_ActorScaleSpeed, speedRate);
+            float duration = SafeDuration((targetScale - transform.localScale).magnitude, actorScaleSpeed, speedRate);
             // 缩放。平滑过渡
-            VnTween.ScaleTransform(transform, targetScale, duration, m_ActorScaleEase, unscaled: false);
+            VnTween.ScaleTransform(transform, targetScale, duration, actorScaleEase, unscaled: false);
         }
 
         /// <summary>
@@ -401,7 +401,7 @@ namespace Ale.VnFramework
         [Header("动画设置")]
         [Tooltip("动画播放器。后端无关基类，挂 SpineAnimator 或 Live2DAnimator 均可")]
         [FormerlySerializedAs("m_SpineAnimator")]
-        [SerializeField] private AnimatorBase m_ActorAnimator;
+        [SerializeField] private AnimatorBase actorAnimator;
 
         // 「初始状态」此前在本组件与 AnimatorBase 上各存一份（本组件那份仅 m_AutoInit 为 true 时才被读，
         // 两个 Demo 预制体都是 false，实际从未生效）。现统一由 AnimatorBase.StateInitList 持有，
@@ -421,21 +421,21 @@ namespace Ale.VnFramework
         /// </summary>
         /// <param name="actorAnims">目标状态名列表。</param>
         public void SwitchStateArray(string[] actorAnims)
-            => RunWhenReady(() => { if (m_ActorAnimator) m_ActorAnimator.SwitchAnimStateArray(actorAnims); });
+            => RunWhenReady(() => { if (actorAnimator) actorAnimator.SwitchAnimStateArray(actorAnims); });
 
         /// <summary>
         /// 添加 一个状态：播放该状态配置的一组动画。状态已存在时不重复添加。
         /// </summary>
         /// <param name="state">状态名称。</param>
         public void AddState(string state)
-            => RunWhenReady(() => { if (m_ActorAnimator) m_ActorAnimator.AddAnimState(state); });
+            => RunWhenReady(() => { if (actorAnimator) actorAnimator.AddAnimState(state); });
 
         /// <summary>
         /// 移除 一个状态：停止该状态配置的一组动画。状态不存在时不处理。
         /// </summary>
         /// <param name="state">状态名称。</param>
         public void RemoveState(string state)
-            => RunWhenReady(() => { if (m_ActorAnimator) m_ActorAnimator.RemoveAnimState(state); });
+            => RunWhenReady(() => { if (actorAnimator) actorAnimator.RemoveAnimState(state); });
         #endregion
 
         #region 单条动画 播放与停止
@@ -481,7 +481,7 @@ namespace Ale.VnFramework
             float startDelayTime = 0f,
             Action onComplete = null)
         {
-            if (!m_ActorAnimator) return false;
+            if (!actorAnimator) return false;
             if (string.IsNullOrEmpty(animName)) return false;
 
             // 把两处「回调静默不触发」显式化，不留给剧情侧去猜
@@ -504,16 +504,16 @@ namespace Ale.VnFramework
 
             RunWhenReady(() =>
             {
-                if (!m_ActorAnimator) return;
+                if (!actorAnimator) return;
                 // 挂起期间可能已被 StopAnim 或新一轮 ExecuteInit 取消
                 AnimData pending;
                 if (!_playingAnimMap.TryGetValue(animName, out pending) || !ReferenceEquals(pending, animData)) return;
 
                 // 播放令牌只在后端真的起播之后才递增，故「前后是否变化」正是「这次有没有播起来」。
                 // 不能用「令牌是否为 0」作判据：该轨道上此前播过别的动画时令牌早就非 0 了。
-                int tokenBefore = m_ActorAnimator.GetAnimPlayToken(trackIndex);
+                int tokenBefore = actorAnimator.GetAnimPlayToken(trackIndex);
 
-                m_ActorAnimator.PlayAnim(animData, _ =>
+                actorAnimator.PlayAnim(animData, _ =>
                 {
                     // 基类在回调前已经把这条停掉了，这里只做本组件的簿记
                     AnimData cur;
@@ -525,7 +525,7 @@ namespace Ale.VnFramework
                 // 起播失败（动画名在后端查不到）时基类只留一句告警、不会有任何回调，
                 // 这里靠令牌未推进判定并把表清干净，免得 IsAnimPlaying 永远为真。
                 // 起播延时 > 0 的那次播放是推迟发生的，令牌当然还没变，故排除在判据之外。
-                if (startDelayTime <= 0f && m_ActorAnimator.GetAnimPlayToken(trackIndex) == tokenBefore)
+                if (startDelayTime <= 0f && actorAnimator.GetAnimPlayToken(trackIndex) == tokenBefore)
                     _playingAnimMap.Remove(animName);
             });
 
@@ -546,7 +546,7 @@ namespace Ale.VnFramework
 
             _playingAnimMap.Remove(animName);
             // 必须交回同一个引用：基类以引用地址作身份标识
-            if (m_ActorAnimator) m_ActorAnimator.StopAnim(animData);
+            if (actorAnimator) actorAnimator.StopAnim(animData);
             return true;
         }
 
@@ -561,10 +561,10 @@ namespace Ale.VnFramework
             _stopAnimScratch.Clear();
             _stopAnimScratch.AddRange(_playingAnimMap.Values);
             _playingAnimMap.Clear();
-            if (m_ActorAnimator)
+            if (actorAnimator)
             {
                 foreach (var animData in _stopAnimScratch)
-                    m_ActorAnimator.StopAnim(animData);
+                    actorAnimator.StopAnim(animData);
             }
             _stopAnimScratch.Clear();
         }
@@ -581,7 +581,7 @@ namespace Ale.VnFramework
         /// 设置 基础皮肤组（始终显示的一组皮肤），覆盖预制体上配置的那一组。
         /// </summary>
         public void SetBaseSkin(string[] baseSkinNames, bool isRefresh = true)
-            => RunWhenReady(() => { if (m_ActorAnimator) m_ActorAnimator.SetBaseSkin(baseSkinNames, isRefresh); });
+            => RunWhenReady(() => { if (actorAnimator) actorAnimator.SetBaseSkin(baseSkinNames, isRefresh); });
 
         /// <summary>
         /// 添加 皮肤。可叠加多件；名称不存在时动画播放器会告警并忽略。
@@ -590,25 +590,25 @@ namespace Ale.VnFramework
         /// <param name="skinName">皮肤名称：含文件夹路径时一般用 '/' 分隔。</param>
         /// <param name="isRefresh">是否立即刷新显示。批量增删时前几次传 false、最后一次传 true。</param>
         public void AddSkin(string skinName, bool isRefresh = true)
-            => RunWhenReady(() => { if (m_ActorAnimator) m_ActorAnimator.AddSkin(skinName, isRefresh); });
+            => RunWhenReady(() => { if (actorAnimator) actorAnimator.AddSkin(skinName, isRefresh); });
 
         /// <summary>
         /// 移除 皮肤。
         /// </summary>
         public void RemoveSkin(string skinName, bool isRefresh = true)
-            => RunWhenReady(() => { if (m_ActorAnimator) m_ActorAnimator.RemoveSkin(skinName, isRefresh); });
+            => RunWhenReady(() => { if (actorAnimator) actorAnimator.RemoveSkin(skinName, isRefresh); });
 
         /// <summary>
         /// 刷新 皮肤：把基础皮肤与应用中皮肤的并集重新应用到渲染器。
         /// </summary>
         public void RefreshSkin()
-            => RunWhenReady(() => { if (m_ActorAnimator) m_ActorAnimator.RefreshSkin(); });
+            => RunWhenReady(() => { if (actorAnimator) actorAnimator.RefreshSkin(); });
         #endregion
 
         #region 粒子系统
         [Header("粒子系统")]
         [Tooltip("角色粒子系统 根节点")]
-        [SerializeField] private ParticleSystem m_ParticleSystemRoot;
+        [SerializeField] private ParticleSystem particleSystemRoot;
         
         /// <summary>
         /// 销毁 粒子系统：停止发射并给出等待时长。作用于本组件指定的粒子根节点。
@@ -618,9 +618,9 @@ namespace Ale.VnFramework
         private bool DestroyParticleSystem(out float delay)
         {
             delay = -1f;
-            if (m_ParticleSystemRoot == null) return false;
+            if (particleSystemRoot == null) return false;
 
-            return StopParticlesAndGetDelay(m_ParticleSystemRoot.gameObject, out delay);
+            return StopParticlesAndGetDelay(particleSystemRoot.gameObject, out delay);
         }
 
         /// <summary>

@@ -174,7 +174,7 @@ namespace Ale.VnFramework
                     continue;   // 既没水合、也没存档数据 = 整本未读，不必写
                 }
 
-                records.Add(new FVnReadRecord { ConversationId = conversation.id, Capacity = capacity, Bits = bits });
+                records.Add(new FVnReadRecord { conversationId = conversation.id, capacity = capacity, bits = bits });
             }
 
             return VnReadHistoryCodec.Encode(records);
@@ -192,7 +192,7 @@ namespace Ale.VnFramework
             List<FVnReadRecord> records;
             if (!VnReadHistoryCodec.TryDecode(encoded, out records, out error)) return false;
 
-            for (int i = 0; i < records.Count; i++) _pending[records[i].ConversationId] = records[i].Bits;
+            for (int i = 0; i < records.Count; i++) _pending[records[i].conversationId] = records[i].bits;
             return true;
         }
 

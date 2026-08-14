@@ -57,9 +57,12 @@ namespace Ale.VnFramework
         [Tooltip("负责隐藏的组件。留空则运行时自动在 VnStoryManager 上找。")]
         [SerializeField] private VnUiHider uiHider;
 
-        private VnPlaybackController _controller;
-        private bool _pressed;
-
+        private VnPlaybackController _controller; // Inspector 没挂时运行时在 VnStoryManager 上找
+        private bool _pressed; // 快进按钮按下状态，按下时 BeginFastForward，松开时 EndFastForward
+        
+        /// <summary>
+        /// 负责播放控制的组件。若 Inspector 没挂，运行时会在 VnStoryManager 上找。
+        /// </summary>
         private VnPlaybackController Controller
         {
             get
@@ -70,7 +73,10 @@ namespace Ale.VnFramework
                 return _controller;
             }
         }
-
+        
+        /// <summary>
+        /// 负责隐藏的组件。若 Inspector 没挂，运行时会在 VnStoryManager 上找。
+        /// </summary>
         private VnUiHider Hider
         {
             get
@@ -90,7 +96,7 @@ namespace Ale.VnFramework
         private void OnEnable()
         {
             var c = Controller;
-            if (c != null)
+            if (c)
             {
                 c.StateChanged -= Refresh;
                 c.StateChanged += Refresh;
@@ -101,7 +107,7 @@ namespace Ale.VnFramework
         private void OnDisable()
         {
             var c = Controller;
-            if (c != null) c.StateChanged -= Refresh;
+            if (c) c.StateChanged -= Refresh;
 
             // 被禁用时若还按着快进，PointerUp 永远收不到，倍率会一直卡在 5。
             ReleaseIfHolding();
@@ -157,12 +163,14 @@ namespace Ale.VnFramework
 
         #endregion
 
+        #region 刷新与应用
+        
         /// <summary>按当前状态刷新图标。由 <see cref="VnPlaybackController.StateChanged"/> 驱动。</summary>
         public void Refresh()
         {
             if (!targetImage) return;
             var c = Controller;
-            if (c == null) return;
+            if (!c) return;
 
             switch (kind)
             {
@@ -199,5 +207,7 @@ namespace Ale.VnFramework
             var sprite = on ? onSprite : offSprite;
             if (sprite) targetImage.sprite = sprite;
         }
+        
+        #endregion
     }
 }

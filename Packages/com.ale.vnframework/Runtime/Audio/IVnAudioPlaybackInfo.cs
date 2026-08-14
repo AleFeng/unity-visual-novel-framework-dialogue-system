@@ -32,6 +32,8 @@ namespace Ale.VnFramework
         /// 这是 Unity 音频的固有行为，不做变速不变调处理。</para>
         /// <para>该 Key 没在播放时应当安静地忽略。</para>
         /// </summary>
+        /// <param name="category">音频类别。</param>
+        /// <param name="audioKey">音频 Key。</param>
         /// <param name="rate">倍速。1 为常速。</param>
         void SetPlaybackRate(EVnAudioCategory category, string audioKey, float rate);
     }

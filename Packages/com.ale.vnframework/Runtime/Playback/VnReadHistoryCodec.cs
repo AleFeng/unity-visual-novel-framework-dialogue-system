@@ -10,13 +10,13 @@ namespace Ale.VnFramework
     public struct FVnReadRecord
     {
         /// <summary>会话 ID。</summary>
-        public int ConversationId;
+        public int conversationId;
 
         /// <summary>容量 = 该会话的最大节点 ID + 1。位图按它开长度。</summary>
-        public int Capacity;
+        public int capacity;
 
         /// <summary>位图字节。长度恒为 <see cref="VnReadHistoryCodec.ByteLengthFor"/>。</summary>
-        public byte[] Bits;
+        public byte[] bits;
     }
 
     /// <summary>
@@ -93,7 +93,7 @@ namespace Ale.VnFramework
 
             foreach (var r in records)
             {
-                if (r.Capacity <= 0 || r.Capacity > MaxCapacity || r.Bits == null) continue;
+                if (r.capacity <= 0 || r.capacity > MaxCapacity || r.bits == null) continue;
 
                 byte uniform;
                 if (IsUniform(r, out uniform))
@@ -118,19 +118,19 @@ namespace Ale.VnFramework
                 w.Write(full.Count);
                 foreach (var kv in full)
                 {
-                    w.Write(kv.Key.ConversationId);
-                    w.Write(kv.Key.Capacity);
+                    w.Write(kv.Key.conversationId);
+                    w.Write(kv.Key.capacity);
                     w.Write(kv.Value);
                 }
 
                 w.Write(partial.Count);
                 foreach (var r in partial)
                 {
-                    w.Write(r.ConversationId);
-                    w.Write(r.Capacity);
-                    int len = Math.Min(r.Bits.Length, ByteLengthFor(r.Capacity));
+                    w.Write(r.conversationId);
+                    w.Write(r.capacity);
+                    int len = Math.Min(r.bits.Length, ByteLengthFor(r.capacity));
                     w.Write(len);
-                    w.Write(r.Bits, 0, len);
+                    w.Write(r.bits, 0, len);
                 }
 
                 w.Flush();
@@ -183,7 +183,7 @@ namespace Ale.VnFramework
 
                         var bits = new byte[ByteLengthFor(capacity)];
                         for (int e = 0; e < capacity; e++) SetStatus(bits, e, status);
-                        records.Add(new FVnReadRecord { ConversationId = id, Capacity = capacity, Bits = bits });
+                        records.Add(new FVnReadRecord { conversationId = id, capacity = capacity, bits = bits });
                     }
 
                     int partialCount = r.ReadInt32();
@@ -200,7 +200,7 @@ namespace Ale.VnFramework
                         var read = r.ReadBytes(len);
                         if (read.Length != len) { error = $"会话 {id} 的位图被截断"; return false; }
                         Buffer.BlockCopy(read, 0, bits, 0, len);
-                        records.Add(new FVnReadRecord { ConversationId = id, Capacity = capacity, Bits = bits });
+                        records.Add(new FVnReadRecord { conversationId = id, capacity = capacity, bits = bits });
                     }
                 }
             }
@@ -217,10 +217,10 @@ namespace Ale.VnFramework
         // 会话内所有节点状态是否完全一致。一致才能塌缩成「容量 + 状态」而不丢信息。
         private static bool IsUniform(FVnReadRecord record, out byte status)
         {
-            status = GetStatus(record.Bits, 0);
-            for (int i = 1; i < record.Capacity; i++)
+            status = GetStatus(record.bits, 0);
+            for (int i = 1; i < record.capacity; i++)
             {
-                if (GetStatus(record.Bits, i) != status) return false;
+                if (GetStatus(record.bits, i) != status) return false;
             }
             return true;
         }

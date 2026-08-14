@@ -12,24 +12,24 @@ namespace Ale.VnFramework
     public sealed class VnPlaybackSettingsData
     {
         /// <summary>自动播放开关。</summary>
-        public bool AutoPlay;
+        public bool autoPlay;
         /// <summary>自动播放的停留时长（秒）。</summary>
-        public float AutoPlayDelay = 1.0f;
+        public float autoPlayDelay = 1.0f;
         /// <summary>速度档位：1 / 2 / 3。</summary>
-        public int SpeedTier = 1;
+        public int speedTier = 1;
         /// <summary>快进倍率。</summary>
-        public float FastForwardRate = 5.0f;
+        public float fastForwardRate = 5.0f;
         /// <summary>新对话停止开关。</summary>
-        public bool StopOnUnread = true;
+        public bool stopOnUnread = true;
 
         /// <summary>深拷贝。</summary>
         public VnPlaybackSettingsData Clone() => new VnPlaybackSettingsData
         {
-            AutoPlay = AutoPlay,
-            AutoPlayDelay = AutoPlayDelay,
-            SpeedTier = SpeedTier,
-            FastForwardRate = FastForwardRate,
-            StopOnUnread = StopOnUnread,
+            autoPlay = autoPlay,
+            autoPlayDelay = autoPlayDelay,
+            speedTier = speedTier,
+            fastForwardRate = fastForwardRate,
+            stopOnUnread = stopOnUnread,
         };
     }
 
@@ -46,19 +46,19 @@ namespace Ale.VnFramework
     public sealed class VnStorySaveData
     {
         /// <summary>DTO 版本。字段增删时用它做迁移判断。</summary>
-        public int Version = 1;
+        public int version = 1;
 
         /// <summary>播放控制配置。为 null 时载入方跳过配置、只处理已读记录。</summary>
-        public VnPlaybackSettingsData Settings;
+        public VnPlaybackSettingsData settings;
 
         /// <summary>已读记录（<see cref="VnReadHistoryCodec"/> 产出的 Base64 串）。空串表示什么都没读过。</summary>
-        public string ReadHistory;
+        public string readHistory;
 
         /// <summary>
         /// 存档时的剧本结构指纹。载入时与当前剧本比对，不一致说明剧本被整库重导入过、
         /// 会话与节点 ID 已重编号，已读记录会被丢弃并告警——静默错位比丢记录更糟。
         /// 见 <see cref="VnReadHistory.BuildStamp"/>。
         /// </summary>
-        public string ReadHistoryStamp;
+        public string readHistoryStamp;
     }
 }

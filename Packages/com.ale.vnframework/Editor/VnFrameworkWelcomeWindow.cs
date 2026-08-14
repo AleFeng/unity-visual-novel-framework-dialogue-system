@@ -15,8 +15,6 @@ namespace Ale.VnFramework.Editor
     /// </summary>
     public class VnFrameworkWelcomeWindow : EditorWindow
     {
-        private const string PackageName = "com.ale.vnframework";
-
         // 包内相对路径。绝对路径一律经 PackageInfo.resolvedPath 拼出，不要用
         // Path.GetFullPath("Packages/…")——那是纯 .NET 拼接，只有内嵌包才碰巧成立；
         // 经 git URL / 仓库安装时包位于 Library/PackageCache/<name>@<hash>/，该路径根本不存在。

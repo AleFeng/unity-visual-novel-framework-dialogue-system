@@ -48,25 +48,25 @@ namespace Ale.VnFramework
         // alpha 通道只用 x，颜色通道用四个分量，Transform 通道用 xyz，Delay 通道不用。
         private sealed class Entry
         {
-            public ToolkitTweenHandle Handle;
-            public EChannel Channel;
-            public UnityEngine.Object Target;   // Delay 通道下是 owner，可能为 null
-            public Vector4 End;
-            public float ScaledDuration;        // 当前这一段的实际时长（已除过倍率）
-            public float StartTime;             // 起始时刻，按 Unscaled 取 Time.time / Time.unscaledTime
-            public float RateAtStart;           // 起始时的倍率，用于把剩余时长折回「倍率 1 下的秒数」
-            public EToolkitEase Ease;
-            public bool Unscaled;
-            public Action OnComplete;           // 调用方原始回调（不含本类包装）
-            public bool Dead;
+            public ToolkitTweenHandle handle;
+            public EChannel channel;
+            public UnityEngine.Object target;   // Delay 通道下是 owner，可能为 null
+            public Vector4 end;
+            public float scaledDuration;        // 当前这一段的实际时长（已除过倍率）
+            public float startTime;             // 起始时刻，按 Unscaled 取 Time.time / Time.unscaledTime
+            public float rateAtStart;           // 起始时的倍率，用于把剩余时长折回「倍率 1 下的秒数」
+            public EToolkitEase ease;
+            public bool unscaled;
+            public Action onComplete;           // 调用方原始回调（不含本类包装）
+            public bool dead;
         }
 
-        private static readonly List<Entry> _entries = new List<Entry>();
+        private static readonly List<Entry> Entries = new List<Entry>();
 
         // 关闭 Reload Domain 时静态表会跨播放会话存活，留着上一次运行的已销毁目标。
         // 与 VnStoryAudio.ResetStatics / VnConditionSources.ResetOnPlay 同一约定。
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void ResetStatics() => _entries.Clear();
+        private static void ResetStatics() => Entries.Clear();
 
         private static float Rate => VnPlaybackRate.Playback;
 
@@ -80,11 +80,11 @@ namespace Ale.VnFramework
         // 那时本类收不到通知——靠 IsActive 惰性自愈，不需要额外接线。
         private static void Prune()
         {
-            for (int i = _entries.Count - 1; i >= 0; i--)
+            for (int i = Entries.Count - 1; i >= 0; i--)
             {
-                var e = _entries[i];
-                if (!e.Dead && e.Handle.IsActive) continue;
-                _entries.RemoveAt(i);
+                var e = Entries[i];
+                if (!e.dead && e.handle.IsActive) continue;
+                Entries.RemoveAt(i);
             }
         }
 
@@ -92,8 +92,8 @@ namespace Ale.VnFramework
         // 不能只靠 Prune 的 IsActive 兜底——原回调里若又起新补间，会先看到一张还没清理的表。
         private static Action Wrap(Entry e) => () =>
         {
-            e.Dead = true;
-            e.OnComplete?.Invoke();
+            e.dead = true;
+            e.onComplete?.Invoke();
         };
 
         #endregion
@@ -107,24 +107,24 @@ namespace Ale.VnFramework
             if (Mathf.Approximately(oldRate, newRate)) return;
 
             Prune();
-            if (_entries.Count == 0) return;
+            if (Entries.Count == 0) return;
 
             // 快照后再遍历：重起会调 ToolkitTween，时长 ≤ 0 的快路径会**同步**触发完成回调，
             // 而回调里可能又起新补间、往 _entries 里追加——直接遍历原表会撞上集合被修改。
-            var snapshot = _entries.ToArray();
+            var snapshot = Entries.ToArray();
             foreach (var e in snapshot)
             {
-                if (e.Dead || !e.Handle.IsActive) continue;
+                if (e.dead || !e.handle.IsActive) continue;
 
-                float remainingScaled = e.ScaledDuration - (Now(e.Unscaled) - e.StartTime);
+                float remainingScaled = e.scaledDuration - (Now(e.unscaled) - e.startTime);
                 if (remainingScaled <= 0f) continue;   // 本帧就要结束了，交给它自然完成
 
                 // 折回「倍率 1 下的秒数」再按新倍率缩放。用 RateAtStart 而不是 oldRate：
                 // 条目可能是在上一次倍率变更之后才起的，它的基准倍率未必等于本次的 oldRate。
-                float newScaled = remainingScaled * e.RateAtStart / newRate;
+                float newScaled = remainingScaled * e.rateAtStart / newRate;
 
                 // 必须 complete: false —— 见类注释里那两个不能被提前触发的回调。
-                e.Handle.Kill(false);
+                e.handle.Kill();
                 Restart(e, newScaled);
             }
 
@@ -134,46 +134,46 @@ namespace Ale.VnFramework
         // 按剩余时长重起一条既有作业。条目已在 _entries 里，此处只更新它。
         private static void Restart(Entry e, float scaledDuration)
         {
-            e.ScaledDuration = scaledDuration;
-            e.StartTime = Now(e.Unscaled);
-            e.RateAtStart = Rate;
+            e.scaledDuration = scaledDuration;
+            e.startTime = Now(e.unscaled);
+            e.rateAtStart = Rate;
 
             var cb = Wrap(e);
-            switch (e.Channel)
+            switch (e.channel)
             {
                 case EChannel.CanvasGroupAlpha:
-                    e.Handle = ToolkitTween.FadeCanvasGroup((CanvasGroup)e.Target, e.End.x, scaledDuration, e.Ease, e.Unscaled, cb);
+                    e.handle = ToolkitTween.FadeCanvasGroup((CanvasGroup)e.target, e.end.x, scaledDuration, e.ease, e.unscaled, cb);
                     break;
                 case EChannel.GraphicAlpha:
-                    e.Handle = ToolkitTween.FadeGraphic((Graphic)e.Target, e.End.x, scaledDuration, e.Ease, e.Unscaled, cb);
+                    e.handle = ToolkitTween.FadeGraphic((Graphic)e.target, e.end.x, scaledDuration, e.ease, e.unscaled, cb);
                     break;
                 case EChannel.GraphicColor:
-                    e.Handle = ToolkitTween.TintGraphic((Graphic)e.Target, e.End, scaledDuration, e.Ease, e.Unscaled, cb);
+                    e.handle = ToolkitTween.TintGraphic((Graphic)e.target, e.end, scaledDuration, e.ease, e.unscaled, cb);
                     break;
                 case EChannel.SpriteRendererAlpha:
-                    e.Handle = ToolkitTween.FadeSpriteRenderer((SpriteRenderer)e.Target, e.End.x, scaledDuration, e.Ease, e.Unscaled, cb);
+                    e.handle = ToolkitTween.FadeSpriteRenderer((SpriteRenderer)e.target, e.end.x, scaledDuration, e.ease, e.unscaled, cb);
                     break;
                 case EChannel.TransformPosition:
-                    e.Handle = ToolkitTween.MoveTransform((Transform)e.Target, e.End, scaledDuration, e.Ease, e.Unscaled, cb);
+                    e.handle = ToolkitTween.MoveTransform((Transform)e.target, e.end, scaledDuration, e.ease, e.unscaled, cb);
                     break;
                 case EChannel.TransformEulerAngles:
                     // 重起会让 ToolkitTween 重新读一次 eulerAngles 并重算最短弧。单次四元数往返的
                     // 精度损失可以忽略，且「从当前角度走最短弧到目标角度」本就是想要的语义。
-                    e.Handle = ToolkitTween.RotateTransform((Transform)e.Target, e.End, scaledDuration, e.Ease, e.Unscaled, cb);
+                    e.handle = ToolkitTween.RotateTransform((Transform)e.target, e.end, scaledDuration, e.ease, e.unscaled, cb);
                     break;
                 case EChannel.TransformLocalScale:
-                    e.Handle = ToolkitTween.ScaleTransform((Transform)e.Target, e.End, scaledDuration, e.Ease, e.Unscaled, cb);
+                    e.handle = ToolkitTween.ScaleTransform((Transform)e.target, e.end, scaledDuration, e.ease, e.unscaled, cb);
                     break;
                 case EChannel.Delay:
-                    e.Handle = ToolkitTween.DelayedCall(scaledDuration, cb, e.Unscaled, e.Target);
+                    e.handle = ToolkitTween.DelayedCall(scaledDuration, cb, e.unscaled, e.target);
                     break;
                 default:
-                    e.Dead = true;
+                    e.dead = true;
                     return;
             }
 
             // 重起后立刻失效（目标已销毁 / 时长被压到 0）：打死标记，交给 Prune 摘掉。
-            if (!e.Handle.IsActive) e.Dead = true;
+            if (!e.handle.IsActive) e.dead = true;
         }
 
         #endregion
@@ -275,9 +275,9 @@ namespace Ale.VnFramework
         {
             if (!ReferenceEquals(target, null))
             {
-                for (int i = _entries.Count - 1; i >= 0; i--)
+                for (int i = Entries.Count - 1; i >= 0; i--)
                 {
-                    if (ReferenceEquals(_entries[i].Target, target)) _entries[i].Dead = true;
+                    if (ReferenceEquals(Entries[i].target, target)) Entries[i].dead = true;
                 }
             }
 
@@ -299,15 +299,15 @@ namespace Ale.VnFramework
             Prune();
             return new Entry
             {
-                Channel = channel,
-                Target = target,
-                End = end,
-                ScaledDuration = scaledDuration,
-                StartTime = Now(unscaled),
-                RateAtStart = Rate,
-                Ease = ease,
-                Unscaled = unscaled,
-                OnComplete = onComplete,
+                channel = channel,
+                target = target,
+                end = end,
+                scaledDuration = scaledDuration,
+                startTime = Now(unscaled),
+                rateAtStart = Rate,
+                ease = ease,
+                unscaled = unscaled,
+                onComplete = onComplete,
             };
         }
 
@@ -317,12 +317,12 @@ namespace Ale.VnFramework
         {
             if (!handle.IsActive)
             {
-                e.Dead = true;
+                e.dead = true;
                 return handle;
             }
 
-            e.Handle = handle;
-            _entries.Add(e);
+            e.handle = handle;
+            Entries.Add(e);
             return handle;
         }
 

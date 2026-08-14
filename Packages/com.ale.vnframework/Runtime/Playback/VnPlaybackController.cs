@@ -52,7 +52,7 @@ namespace Ale.VnFramework
 
         [Header("自动播放")]
         [Tooltip("自动播放 默认是否开启。需求要求默认关闭。")]
-        [SerializeField] private bool autoPlayDefaultOn = false;
+        [SerializeField] private bool autoPlayDefaultOn;
         [Tooltip("自动播放 停留时长（秒）：本行演完之后再等多久推进下一句。快进时会按倍率压缩。")]
         [SerializeField] private float autoPlayDelay = 1.0f;
         [Tooltip("等待打字机起播的宽限时长（秒）。见 CorAutoAdvance 的说明，一般不用改。")]
@@ -258,11 +258,11 @@ namespace Ale.VnFramework
         /// <summary>取当前配置的**深拷贝**。调用方持有并序列化它的期间，玩家继续改设置不会影响这份快照。</summary>
         public VnPlaybackSettingsData GetSettings() => new VnPlaybackSettingsData
         {
-            AutoPlay = _autoPlay,
-            AutoPlayDelay = autoPlayDelay,
-            SpeedTier = (int)_speedTier,
-            FastForwardRate = fastForwardRate,
-            StopOnUnread = _stopOnUnread,
+            autoPlay = _autoPlay,
+            autoPlayDelay = autoPlayDelay,
+            speedTier = (int)_speedTier,
+            fastForwardRate = fastForwardRate,
+            stopOnUnread = _stopOnUnread,
         };
 
         /// <summary>
@@ -277,12 +277,12 @@ namespace Ale.VnFramework
         {
             if (data == null) return;
 
-            _autoPlay = data.AutoPlay;
-            autoPlayDelay = Mathf.Max(0f, data.AutoPlayDelay);
-            fastForwardRate = Mathf.Max(1f, data.FastForwardRate);
-            _stopOnUnread = data.StopOnUnread;
+            _autoPlay = data.autoPlay;
+            autoPlayDelay = Mathf.Max(0f, data.autoPlayDelay);
+            fastForwardRate = Mathf.Max(1f, data.fastForwardRate);
+            _stopOnUnread = data.stopOnUnread;
 
-            var tier = Mathf.Clamp(data.SpeedTier, 1, 3);
+            var tier = Mathf.Clamp(data.speedTier, 1, 3);
             _speedTier = (EVnPlaybackSpeedTier)tier;
 
             // 快进态不进存档：它是「按住」这个瞬时动作的产物，读档时必须回到未按住。

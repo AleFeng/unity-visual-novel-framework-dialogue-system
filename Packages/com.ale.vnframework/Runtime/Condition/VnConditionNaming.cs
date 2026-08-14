@@ -60,7 +60,7 @@ namespace Ale.VnFramework.Conditions
         /// <para>不含撞名检查 —— 那需要跨判定器的全局状态，由调用方各自维护。</para>
         /// </summary>
         /// <returns>可接入返回 <c>true</c>；否则 <c>false</c> 且 <paramref name="skipReason"/> 给出人话原因。</returns>
-        public static bool TryPlan(Ale.Condition.IConditionEvaluator evaluator,
+        public static bool TryPlan(Condition.IConditionEvaluator evaluator,
             out string luaFunctionName, out int parameterCount, out string skipReason)
         {
             luaFunctionName = null;
