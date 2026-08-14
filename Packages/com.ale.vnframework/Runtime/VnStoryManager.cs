@@ -67,6 +67,11 @@ namespace Ale.VnFramework
 #endif
             // 初始化 对话
             AwakeDialogue();
+
+            // 订阅演出倍率变更，把倍率推给场上的角色与特效。
+            // 静态事件在关闭 Reload Domain 的工程里会留住上一次运行的订阅者，故必须与 OnDestroy 配对。
+            VnPlaybackRate.PlaybackChanged -= OnPlaybackRateChanged;
+            VnPlaybackRate.PlaybackChanged += OnPlaybackRateChanged;
         }
 
         protected override void OnDestroy()
@@ -85,12 +90,85 @@ namespace Ale.VnFramework
             // 注销持久化数据
             PersistentDataManager.UnregisterPersistentData(gameObject);
 
+            // 与 Awake 的订阅配对。不退订的话，事件会一直强引用已销毁的本实例，
+            // 下一个实例上场后两个都会收到通知、其中一个在改一堆已经不存在的对象。
+            VnPlaybackRate.PlaybackChanged -= OnPlaybackRateChanged;
+            // 倍率归位：静态值会跨播放会话存活，退出时若正处于快进，下次进播放所有补间都会是 5 倍速。
+            VnPlaybackRate.Set(1f, 1f);
+
 #if ATK_LOCALIZATION
             // 销毁 多语言
             OnDestroyLocalization();
 #endif
         }
-        
+
+        #region 播放倍率
+        /// <summary>
+        /// 设置演出倍率。本管理器是 <see cref="VnPlaybackRate"/> 的唯一写入者。
+        /// </summary>
+        /// <param name="playbackRate">演出倍率：补间、延时、角色动画、粒子、语音。</param>
+        /// <param name="typewriterRate">打字机倍率：字速与标点停顿。</param>
+        public void SetPlaybackRate(float playbackRate, float typewriterRate)
+        {
+            // Set 内部会重定时在途补间，并在演出倍率真的变了时触发 PlaybackChanged（→ 角色 / 特效跟随）。
+            VnPlaybackRate.Set(playbackRate, typewriterRate);
+            // 打字机倍率不走事件——只改档位、不进快进时 PlaybackChanged 并不触发，这里显式重刷。
+            RefreshTypewriterSpeed();
+        }
+
+        private void OnPlaybackRateChanged(float rate) => ApplyPlaybackRateToActors(rate);
+
+        /// <summary>
+        /// 把演出倍率推给场上所有角色与特效实例。新实例出场时也应调一次，
+        /// 否则快进途中加载出来的角色会以常速播放。
+        /// </summary>
+        public void ApplyPlaybackRateToActors(float rate)
+        {
+            foreach (var kvp in _mapActorAnimator)
+            {
+                var instance = kvp.Value.PrefabInstance;
+                if (!instance) continue;
+
+                // 先找可选契约的实现者（本包的 VnActorAnimator 实现了它，第三方组件也可以）。
+                // 找得到就交给它自己决定怎么缩放后端——它会正确缓存作者基准值。
+                var receivers = instance.GetComponentsInChildren<IVnPlaybackRateReceiver>(true);
+                if (receivers.Length > 0)
+                {
+                    foreach (var receiver in receivers) receiver.OnVnPlaybackRateChanged(rate);
+                }
+                else
+                {
+                    ApplyPlaybackRateToPlainInstance(instance, rate);
+                }
+            }
+        }
+
+        /// <summary>
+        /// 没有 <see cref="IVnPlaybackRateReceiver"/> 时的降级路径（纯图片 / 纯粒子预制体）。
+        /// 判据与 <c>FadeInActorsAndEffects</c> 的降级分支一致。
+        ///
+        /// <para><b>这里是绝对赋值而不是「作者基准 × 倍率」</b>：本管理器不为这类实例缓存基准值，
+        /// 相乘会在连续变速时逐次累乘（1→5→1 之后会停在 5 而不是回到 1）。
+        /// 代价是把 <c>simulationSpeed</c> 配成非 1 的预制体会被改写成倍率本身；
+        /// 需要保住自定义基准速度的，给预制体挂上 <see cref="VnActorAnimator"/>——它会正确缓存基准。</para>
+        /// </summary>
+        private static void ApplyPlaybackRateToPlainInstance(GameObject instance, float rate)
+        {
+            foreach (var anim in instance.GetComponentsInChildren<Animator>(true))
+            {
+                if (anim) anim.speed = rate;
+            }
+
+            foreach (var ps in instance.GetComponentsInChildren<ParticleSystem>(true))
+            {
+                if (!ps) continue;
+                // ParticleSystem.main 是结构体，必须取出来改完再写回，不能直接给属性链赋值。
+                var main = ps.main;
+                main.simulationSpeed = rate;
+            }
+        }
+        #endregion
+
         #region 流程控制
         private bool _isVnStoryStarted; // Vn故事系统 是否已经开始
         
@@ -306,7 +384,7 @@ namespace Ale.VnFramework
             if (uiCanvasGroup)
             {
                 // 淡入动画
-                ToolkitTween.FadeCanvasGroup(uiCanvasGroup, 1f, 0.5f, unscaled: false, onComplete: () =>
+                VnTween.FadeCanvasGroup(uiCanvasGroup, 1f, 0.5f, unscaled: false, onComplete: () =>
                 {
                     // uiCanvasGroup可用
                     uiCanvasGroup.interactable = true; // 可交互
@@ -338,7 +416,7 @@ namespace Ale.VnFramework
                 uiCanvasGroup.interactable = false; // 不可交互
                 uiCanvasGroup.blocksRaycasts = false; // 不接收射线
                 // 淡出动画
-                ToolkitTween.FadeCanvasGroup(uiCanvasGroup, 0f, 0.5f, unscaled: false, onComplete: () =>
+                VnTween.FadeCanvasGroup(uiCanvasGroup, 0f, 0.5f, unscaled: false, onComplete: () =>
                 {
                     // 完成回调
                     onComplete?.Invoke();
@@ -681,7 +759,14 @@ namespace Ale.VnFramework
                             // UnityUITypewriterEffect（未装 TextMeshPro 时），取具体子类会漏掉它、调速静默失效。
                             var typewriter = panel.subtitleText.gameObject.GetComponent<AbstractTypewriterEffect>();
                             if (typewriter)
-                                _dialogueTypewriters.Add(typewriter);
+                                // 连同作者配置的标点停顿一起记下来当基准，原因见 FTypewriterEntry 的说明。
+                                // 这里是全流程中唯一读这两个值的地方，且早于任何倍率写入。
+                                _dialogueTypewriters.Add(new FTypewriterEntry
+                                {
+                                    Typewriter = typewriter,
+                                    FullPauseBase = typewriter.fullPauseDuration,
+                                    QuarterPauseBase = typewriter.quarterPauseDuration,
+                                });
                             else
                                 Debug.LogWarning($"剧情演出 >> 字幕面板 '{panel.name}' 的字幕文本组件上没有打字机组件，无法设置打字机速度。" +
                                                  $"请在该文本组件上添加 TextMeshPro Typewriter Effect（或 Unity UI Typewriter Effect）。");
@@ -768,21 +853,80 @@ namespace Ale.VnFramework
         [Tooltip("对话-打字机 字符数/秒（默认10）")]
         [SerializeField] private float dialogueTypewriterPerSecond = 10f;
         
+        /// <summary>
+        /// 一个打字机组件，连同它在预制体上**作者配置的**标点停顿基准值。
+        ///
+        /// <para>停顿基准必须在收集时缓存一次：之后本管理器会独占写入
+        /// <c>fullPauseDuration</c> / <c>quarterPauseDuration</c>（按倍率缩放），
+        /// 若等到倍率已经不是 1 时才第一次去读，读到的就是被缩放过的值——
+        /// 基准一旦污染，此后每次变速都在错误的基数上再除一次，越调越离谱。</para>
+        /// </summary>
+        private struct FTypewriterEntry
+        {
+            public AbstractTypewriterEffect Typewriter;
+            public float FullPauseBase;
+            public float QuarterPauseBase;
+        }
+
         // 如果你只需要快速访问所有的打字机组件。
         // 用基类装：TextMeshProTypewriterEffect 与 UnityUITypewriterEffect 都派生自它，
-        // charactersPerSecond 也声明在基类上，故两种实现都能被收集与调速。
-        private readonly List<AbstractTypewriterEffect> _dialogueTypewriters = new List<AbstractTypewriterEffect>();
+        // charactersPerSecond 与两个停顿时长也都声明在基类上，故两种实现都能被收集与调速。
+        private readonly List<FTypewriterEntry> _dialogueTypewriters = new List<FTypewriterEntry>();
+
+        // 当前这一行由剧本节点指定的速度倍率（字段标题 DialogueTypewriterSpeed）。
+        // 与玩家侧的倍率相乘才是最终字速，故要留着——倍率中途变化时需要用它重算。
+        private float _lineTypewriterSpeed = 1.0f;
 
         /// <summary>
-        /// 设置 打字机的速度
+        /// 设置 打字机的速度。<paramref name="speed"/> 是**剧本节点**给的倍率，
+        /// 与玩家侧的 <see cref="VnPlaybackRate.Typewriter"/> 相乘。
         /// </summary>
         /// <param name="speed">速度倍率。默认为 1.0</param>
         private void SetAllTypewritersSpeed(float speed = 1.0f)
         {
-            foreach (var tw in _dialogueTypewriters)
+            _lineTypewriterSpeed = speed;
+            RefreshTypewriterSpeed();
+        }
+
+        /// <summary>
+        /// 按当前倍率重刷全部打字机的字速与标点停顿。
+        /// 切换播放速度档位、进出快进之后调用。
+        ///
+        /// <para><b>字速的写入时机很讲究。</b>Dialogue System 的打字循环里
+        /// <c>goal = elapsed * charactersPerSecond</c>，<c>elapsed</c> 从行首累计，
+        /// 而 <c>delay = 1 / charactersPerSecond</c> **只在起播时算一次**。所以在一行打到一半时
+        /// 提高字速，既会因为 <c>goal</c> 突变而一次性蹦出一大段字，又会因为外层循环仍按老节奏轮转
+        /// 而变成「每 0.1 秒吐 5 个字」的顿挫——后者比跳字更难看。
+        /// 因此调用方应当只在**行边界**改字速；进入快进时先把当前行的打字机 <c>Stop()</c> 掉再推进，
+        /// 于是字速永远只在「没有行正在打字」时被写。</para>
+        ///
+        /// <para><b>标点停顿则可以随时改。</b>它们是每次逐字循环重新读的，不会跳变。
+        /// 而且不缩放的话速度档基本是假的：样例配的是句号停 1 秒、逗号停 0.3 秒的**绝对秒数**，
+        /// 一句 30 字的中文台词打字 1.5 秒、标点却要停 1.6 秒——只调字速的话 3 档速实际只有 1.48 倍。</para>
+        /// </summary>
+        public void RefreshTypewriterSpeed()
+        {
+            var rate = VnPlaybackRate.Typewriter;
+            var cps = _lineTypewriterSpeed * dialogueTypewriterPerSecond * rate;
+
+            foreach (var entry in _dialogueTypewriters)
             {
-                tw.charactersPerSecond = speed * dialogueTypewriterPerSecond;
+                var tw = entry.Typewriter;
+                if (!tw) continue;
+                tw.charactersPerSecond = cps;
+                tw.fullPauseDuration = entry.FullPauseBase / rate;
+                tw.quarterPauseDuration = entry.QuarterPauseBase / rate;
             }
+        }
+
+        /// <summary>当前是否还有字幕打字机在逐字显示。自动播放据此判断「本行文本是否已显示完」。</summary>
+        public bool IsAnyTypewriterPlaying()
+        {
+            foreach (var entry in _dialogueTypewriters)
+            {
+                if (entry.Typewriter && entry.Typewriter.isPlaying) return true;
+            }
+            return false;
         }
         #endregion
 
@@ -986,14 +1130,14 @@ namespace Ale.VnFramework
             {
                 srBackgroundCurrent.gameObject.SetActive(true);
                 // 本门面不做覆盖管理，先打断该目标上的在途补间再起新的
-                ToolkitTween.Kill(srBackgroundCurrent);
-                ToolkitTween.FadeSpriteRenderer(srBackgroundCurrent, 1f, backgroundFadeDuration, unscaled: false);
+                VnTween.Kill(srBackgroundCurrent);
+                VnTween.FadeSpriteRenderer(srBackgroundCurrent, 1f, backgroundFadeDuration, unscaled: false);
             }
             if (srBackgroundLast)
             {
                 srBackgroundLast.gameObject.SetActive(true);
-                ToolkitTween.Kill(srBackgroundLast);
-                ToolkitTween.FadeSpriteRenderer(srBackgroundLast, 0f, backgroundFadeDuration, unscaled: false);
+                VnTween.Kill(srBackgroundLast);
+                VnTween.FadeSpriteRenderer(srBackgroundLast, 0f, backgroundFadeDuration, unscaled: false);
             }
         }
         
@@ -1007,8 +1151,8 @@ namespace Ale.VnFramework
             
             if (srBackgroundCurrent)
             {
-                ToolkitTween.Kill(srBackgroundCurrent);
-                ToolkitTween.FadeSpriteRenderer(srBackgroundCurrent, 0f, backgroundFadeDuration, unscaled: false,
+                VnTween.Kill(srBackgroundCurrent);
+                VnTween.FadeSpriteRenderer(srBackgroundCurrent, 0f, backgroundFadeDuration, unscaled: false,
                     onComplete: () =>
                     {
                         srBackgroundCurrent.gameObject.SetActive(false);
@@ -1016,8 +1160,8 @@ namespace Ale.VnFramework
             }
             if (srBackgroundLast)
             {
-                ToolkitTween.Kill(srBackgroundLast);
-                ToolkitTween.FadeSpriteRenderer(srBackgroundLast, 0f, backgroundFadeDuration, unscaled: false,
+                VnTween.Kill(srBackgroundLast);
+                VnTween.FadeSpriteRenderer(srBackgroundLast, 0f, backgroundFadeDuration, unscaled: false,
                     onComplete: () =>
                     {
                         srBackgroundLast.gameObject.SetActive(false);
@@ -1040,15 +1184,15 @@ namespace Ale.VnFramework
             // 淡出背景图像
             if (srBackgroundCurrent)
             {
-                ToolkitTween.Kill(srBackgroundCurrent);
-                ToolkitTween.FadeSpriteRenderer(srBackgroundCurrent, 0f, delay, unscaled: false);
+                VnTween.Kill(srBackgroundCurrent);
+                VnTween.FadeSpriteRenderer(srBackgroundCurrent, 0f, delay, unscaled: false);
             }
             if (srBackgroundLast)
             {
-                ToolkitTween.Kill(srBackgroundLast);
-                ToolkitTween.FadeSpriteRenderer(srBackgroundLast, 0f, delay, unscaled: false);
+                VnTween.Kill(srBackgroundLast);
+                VnTween.FadeSpriteRenderer(srBackgroundLast, 0f, delay, unscaled: false);
             }
-            _tweenClearAllBackground = ToolkitTween.DelayedCall(delay, () =>
+            _tweenClearAllBackground = VnTween.DelayedCall(delay, () =>
             {
                 // 卸载背景图像资源
                 UnloadLastBackground();
@@ -1273,7 +1417,9 @@ namespace Ale.VnFramework
                         srBackgroundLast.color = new Color(1, 1, 1, 1 - t);
                         srBackgroundCurrent.color = new Color(1, 1, 1, t);
                         yield return null;
-                        elapsed += Time.deltaTime;
+                        // 乘演出倍率：背景交叉淡是手写插值而不是补间，走不了 VnTween 那条路。
+                        // 好处是它天然支持中途变速——快进按下去的当帧就开始按新倍率推进，不像补间要杀掉重起。
+                        elapsed += Time.deltaTime * VnPlaybackRate.Playback;
                     }
                     if (!srBackgroundCurrent || !srBackgroundLast) yield break;
                     // 动画结束后，设置新背景为不透明，隐藏旧背景
@@ -1499,7 +1645,7 @@ namespace Ale.VnFramework
                     // 延迟设置角色预制体
                     // 使用单元素持有器引用句柄，避免闭包捕获外部被修改的变量。
                     var tweenHolder = new ToolkitTweenHandle[1];
-                    tweenHolder[0] = ToolkitTween.DelayedCall(delay, () =>
+                    tweenHolder[0] = VnTween.DelayedCall(delay, () =>
                     {
                         // 设置角色预制体
                         InitActorPrefab(actorAnimsLoadData, actorPosParam, actorRotateParam, actorScaleParam, actorAnimParam);
@@ -1571,7 +1717,7 @@ namespace Ale.VnFramework
 
             // 刻意不传 owner：要销毁的正是这个实例，绑定生命周期会让回调随对象一起被丢弃，
             // 而 UnloadAsset 靠这个回调执行。与 VnActorAnimator.ExecuteDestroy 的取舍一致。
-            ToolkitTween.DelayedCall(delayParticle, () =>
+            VnTween.DelayedCall(delayParticle, () =>
             {
                 if (instance) Destroy(instance);
                 UnloadAsset(assetAddress);
@@ -1939,7 +2085,7 @@ namespace Ale.VnFramework
                 if (delay > 0f)
                 {
                     var tweenHolder = new ToolkitTweenHandle[1];
-                    tweenHolder[0] = ToolkitTween.DelayedCall(delay, () =>
+                    tweenHolder[0] = VnTween.DelayedCall(delay, () =>
                     {
                         // 延迟时间到，播放背景音乐。循环播放
                         VnStoryAudio.PlayWithChannel(EVnAudioCategory.Bgm, audioFieldTitle, audioKey, volume, pitch);
@@ -2032,7 +2178,7 @@ namespace Ale.VnFramework
                 if (delay > 0f)
                 {
                     var tweenHolder = new ToolkitTweenHandle[1];
-                    tweenHolder[0] = ToolkitTween.DelayedCall(delay, () =>
+                    tweenHolder[0] = VnTween.DelayedCall(delay, () =>
                     {
                         // 延迟 播放音频
                         VnStoryAudio.Play(category, audioKey, volume, pitch);

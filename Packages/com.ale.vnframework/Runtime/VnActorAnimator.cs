@@ -12,7 +12,7 @@ namespace Ale.VnFramework
     /// 动画后端由 com.ale.animsimulatorsystem 的 AnimatorBase 抽象，
     /// 挂 SpineAnimator 还是 Live2DAnimator 由预制体决定，本类不关心。
     /// </summary>
-    public class VnActorAnimator : MonoBehaviour
+    public class VnActorAnimator : MonoBehaviour, IVnPlaybackRateReceiver
     {
 #if UNITY_EDITOR
         private void Reset()
@@ -61,7 +61,7 @@ namespace Ale.VnFramework
             // SetToPosition 补间在随后的帧里把这里写的位姿覆盖回它自己的终点。
             // 用 Kill 而非 CompleteTransformTween：后者会先把角色瞬置到旧目标点再被下面覆盖，
             // 白跑一趟还会触发旧补间的完成回调。
-            ToolkitTween.Kill(transform);
+            VnTween.Kill(transform);
 
             // 先落位、后激活：本对象在被激活的那一刻就已处于最终位姿。
             // 原先「挪到 (999999999,…)、缩放归零」是为了遮住「等一帧再落位」的那一帧，
@@ -227,7 +227,7 @@ namespace Ale.VnFramework
             // 而 VnStoryManager.UnloadActorPrefab 靠这个回调卸载资源。保持「延时独立于目标存亡」。
             if (hasDelay)
             {
-                ToolkitTween.DelayedCall(maxDelay, () =>
+                VnTween.DelayedCall(maxDelay, () =>
                 {
                     // 销毁对象
                     if (this != null && gameObject) Destroy(gameObject);
@@ -307,7 +307,7 @@ namespace Ale.VnFramework
         public void CompleteTransformTween()
         {
             // 立刻完成 本 Transform 上全部在途补间（瞬置到终值并触发完成回调）
-            ToolkitTween.Kill(transform, complete: true);
+            VnTween.Kill(transform, complete: true);
         }
         
         /// <summary>
@@ -329,7 +329,7 @@ namespace Ale.VnFramework
             // 计算过渡时间
             float duration = SafeDuration((targetPos - transform.position).magnitude, m_ActorPosSpeed, speedRate);
             // 位置。平滑过渡
-            ToolkitTween.MoveTransform(transform, targetPos, duration, m_ActorPosEase, unscaled: false);
+            VnTween.MoveTransform(transform, targetPos, duration, m_ActorPosEase, unscaled: false);
         }
         
         /// <summary>
@@ -352,7 +352,7 @@ namespace Ale.VnFramework
             float angleDiff = Quaternion.Angle(Quaternion.Euler(transform.eulerAngles), Quaternion.Euler(targetRot));
             float duration = SafeDuration(angleDiff, m_ActorRotateSpeed, speedRate);
             // 旋转。平滑过渡。逐轴走最短弧，与上面按 Quaternion.Angle 算出的时长一致
-            ToolkitTween.RotateTransform(transform, targetRot, duration, m_ActorRotateEase, unscaled: false);
+            VnTween.RotateTransform(transform, targetRot, duration, m_ActorRotateEase, unscaled: false);
         }
         
         /// <summary>
@@ -374,7 +374,7 @@ namespace Ale.VnFramework
             // 计算过渡时间
             float duration = SafeDuration((targetScale - transform.localScale).magnitude, m_ActorScaleSpeed, speedRate);
             // 缩放。平滑过渡
-            ToolkitTween.ScaleTransform(transform, targetScale, duration, m_ActorScaleEase, unscaled: false);
+            VnTween.ScaleTransform(transform, targetScale, duration, m_ActorScaleEase, unscaled: false);
         }
 
         /// <summary>
@@ -653,6 +653,64 @@ namespace Ale.VnFramework
             delay = maxLifetime;
 
             return true;
+        }
+        #endregion
+
+        #region 播放倍率
+        // Unity Animator 与粒子系统的「作者配置速度」基准。与打字机的标点停顿同理：
+        // 只能采一次。若每次变速都现读当前值当基准，第二次变速就会在已经被缩放过的值上再缩一次。
+        private Animator[] _rateAnimators;
+        private float[] _rateAnimatorBase;
+        private ParticleSystem[] _rateParticles;
+        private float[] _rateParticleBase;
+        private bool _rateCached;
+
+        /// <summary>
+        /// 演出倍率变化时跟随。见 <see cref="IVnPlaybackRateReceiver"/>。
+        ///
+        /// <para><b>只覆盖 Unity <c>Animator</c> 与粒子系统。</b>Spine / Live2D 的状态动画吃不到——
+        /// <c>AnimatorBase</c> 没有实时时间缩放 API，速度在起播时就被烘进后端的轨道项了。
+        /// 这是已知缺口，补齐的位置在 com.ale.animsimulatorsystem，不在本包。</para>
+        /// </summary>
+        /// <param name="rate">新倍率。1 为常速。</param>
+        public void OnVnPlaybackRateChanged(float rate)
+        {
+            if (rate <= 0f) return;
+            EnsureRateCache();
+
+            for (int i = 0; i < _rateAnimators.Length; i++)
+            {
+                var anim = _rateAnimators[i];
+                if (anim) anim.speed = _rateAnimatorBase[i] * rate;
+            }
+
+            for (int i = 0; i < _rateParticles.Length; i++)
+            {
+                var ps = _rateParticles[i];
+                if (!ps) continue;
+                // ParticleSystem.main 是**结构体**，必须取出来改完再写回去；
+                // 直接写 ps.main.simulationSpeed 编译不过（对临时值赋值）。
+                var main = ps.main;
+                main.simulationSpeed = _rateParticleBase[i] * rate;
+            }
+        }
+
+        // 惰性采样。放在这里而不是 Awake：预制体实例化后还会被 SetActive(false) 再激活，
+        // 且倍率通常在第一行演出之后才变，等到真要用时再采既省事又不会漏掉后加的子物体。
+        private void EnsureRateCache()
+        {
+            if (_rateCached) return;
+            _rateCached = true;
+
+            _rateAnimators = GetComponentsInChildren<Animator>(true);
+            _rateAnimatorBase = new float[_rateAnimators.Length];
+            for (int i = 0; i < _rateAnimators.Length; i++)
+                _rateAnimatorBase[i] = _rateAnimators[i] ? _rateAnimators[i].speed : 1f;
+
+            _rateParticles = GetComponentsInChildren<ParticleSystem>(true);
+            _rateParticleBase = new float[_rateParticles.Length];
+            for (int i = 0; i < _rateParticles.Length; i++)
+                _rateParticleBase[i] = _rateParticles[i] ? _rateParticles[i].main.simulationSpeed : 1f;
         }
         #endregion
     }

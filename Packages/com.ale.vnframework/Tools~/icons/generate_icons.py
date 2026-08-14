@@ -16,8 +16,17 @@ OFL 约束的是字体软件本身的再分发，不限制字形的光栅化产�
 用法（仓库根目录下）：
     python "Packages/com.ale.vnframework/Tools~/icons/generate_icons.py"
 
-输出到 Packages/com.ale.vnframework/Runtime/UI/Icons/，覆盖同名文件。
-生成后需要在 Unity 里把它们的 Texture Type 设为 Sprite（见同目录 README 或本包 CHANGELOG）。
+输出到样例的 Assets/UI/Icons/，覆盖同名文件。
+
+⚠️ 输出路径指向的是 **Assets/Samples/… 这份镜像**（能在 Unity 里立刻看到效果），
+而随包发布的源在 Packages/com.ale.vnframework/Samples~/VN Framework Demo/Assets/UI/Icons/。
+改完图标记得把两边同步回去，规则与样例里其它文件一致：
+
+    diff -rq "Assets/Samples/Ale VN Framework/1.0.0/VN Framework Demo" \
+             "Packages/com.ale.vnframework/Samples~/VN Framework Demo"
+
+新生成的文件在 Unity 里默认是 Default 贴图，需要把 Texture Type 设为 Sprite
+（已有 .meta 的同名覆盖不受影响，保持原设置）。
 """
 
 import os
@@ -40,7 +49,8 @@ GLOW_GAIN = 1.45                # 模糊后提亮系数：近场接近饱和、�
 # 仓库根 = 本文件往上四层（icons -> Tools~ -> com.ale.vnframework -> Packages -> 根）
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
-OUT_DIR = os.path.join(REPO, "Packages", "com.ale.vnframework", "Runtime", "UI", "Icons")
+OUT_DIR = os.path.join(REPO, "Assets", "Samples", "Ale VN Framework", "1.0.0",
+                       "VN Framework Demo", "Assets", "UI", "Icons")
 FONT_PATH = os.path.join(REPO, "Assets", "TextMesh Pro", "Fonts", "LiberationSans.ttf")
 
 
