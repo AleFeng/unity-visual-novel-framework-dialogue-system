@@ -102,6 +102,26 @@ namespace Ale.VnFramework
 #endif
         }
 
+        private void Start()
+        {
+            if (Instance != this) return;
+
+            // SimStatus 的开关必须在 Start 而不是 Awake 里压——
+            // DialogueSystemController 与本类在同一个 GameObject 上，两者 Awake 的先后未定义，
+            // 而它的 Awake 里有一句会把 DialogueLua.includeSimStatus 覆写回 Inspector 上的值。
+            // 详见 VnReadHistory.EnsureSimStatusEnabled 的说明。
+            VnReadHistory.EnsureSimStatusEnabled();
+        }
+
+        #region 已读记录
+        private VnReadHistory _readHistory;
+
+        /// <summary>
+        /// 已读记录。运行时判定走 Dialogue System 的 SimStatus，本对象负责紧凑持久化与读档回填。
+        /// </summary>
+        public VnReadHistory ReadHistory => _readHistory ?? (_readHistory = new VnReadHistory());
+        #endregion
+
         #region 播放倍率
         /// <summary>
         /// 设置演出倍率。本管理器是 <see cref="VnPlaybackRate"/> 的唯一写入者。
@@ -288,6 +308,15 @@ namespace Ale.VnFramework
         public virtual void OnConversationStart(Transform actor)
         {
             // TODO: 暂停当前BGM
+
+            // 把本段对话的已读状态推进 Lua。**必须在这里，不能更晚**：
+            // DialogueSystemController.StartConversation 里 :1178 广播本消息、:1179 才 GotoState(firstState)，
+            // 而首行的 SimStatus 是在 GotoState 之后的行准备阶段打的标。
+            // 若拖到 OnConversationLine 才水合，就会用存档数据把 DS 刚打好的「本行已显示」覆盖掉。
+            // lastConversationID 在 :1144 已经赋值，此刻可用。
+            VnReadHistory.EnsureSimStatusEnabled();
+            var conversationId = DialogueManager.lastConversationID;
+            if (conversationId >= 0) ReadHistory.HydrateConversation(conversationId);
         }
 
         /// <summary>
