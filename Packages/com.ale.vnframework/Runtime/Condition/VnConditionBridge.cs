@@ -22,10 +22,11 @@ namespace Ale.VnFramework.Conditions
     public static class VnConditionBridge
     {
         private static readonly List<string> RegisteredNames = new List<string>();
-        private static readonly VnConditionEmptyContext FallbackContext = new VnConditionEmptyContext();
 
-        /// <summary>求值时传给判定器的上下文。</summary>
-        internal static IConditionContext Context => FallbackContext;
+        /// <summary>
+        /// 求值时传给判定器的上下文。数值 / 标记取自宿主经 <see cref="VnConditionSources"/> 注册的实时 getter。
+        /// </summary>
+        internal static IConditionContext Context => VnConditionContext.Instance;
 
         /// <summary>已注册的 Lua 条件函数名（只读快照，供自检与测试）。</summary>
         public static IReadOnlyList<string> RegisteredFunctionNames => RegisteredNames;
@@ -115,16 +116,6 @@ namespace Ale.VnFramework.Conditions
                 Lua.UnregisterFunction(RegisteredNames[i]);
             }
             RegisteredNames.Clear();
-        }
-
-        /// <summary>
-        /// 不提供任何服务的占位上下文：判定器取不到数据源时按各自的约定返回 false。
-        /// 宿主数据源在下一步接入。
-        /// </summary>
-        private sealed class VnConditionEmptyContext : IConditionContext
-        {
-            public object Subject => null;
-            public T GetService<T>() where T : class => null;
         }
     }
 }
