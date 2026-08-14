@@ -116,7 +116,11 @@ namespace Ale.VnFramework
             RefreshTypewriterSpeed();
         }
 
-        private void OnPlaybackRateChanged(float rate) => ApplyPlaybackRateToActors(rate);
+        private void OnPlaybackRateChanged(float rate)
+        {
+            ApplyPlaybackRateToActors(rate);
+            ApplyPlaybackRateToVoice(rate);
+        }
 
         /// <summary>
         /// 把演出倍率推给场上所有角色与特效实例。新实例出场时也应调一次，
@@ -2177,11 +2181,18 @@ namespace Ale.VnFramework
                 // 延迟播放
                 if (delay > 0f)
                 {
+                    // 语音的延迟要单独计数：延迟期间它还没进 _dicSfxFieldTitleToAudioKey，
+                    // 自动播放若只看那张表会以为「本行没有语音」，在语音响起之前就把台词翻过去。
+                    bool isVoice = category == EVnAudioCategory.Voice;
+                    if (isVoice) _pendingVoiceDelayCount++;
+
                     var tweenHolder = new ToolkitTweenHandle[1];
                     tweenHolder[0] = VnTween.DelayedCall(delay, () =>
                     {
-                        // 延迟 播放音频
-                        VnStoryAudio.Play(category, audioKey, volume, pitch);
+                        if (isVoice && _pendingVoiceDelayCount > 0) _pendingVoiceDelayCount--;
+                        // 延迟 播放音频。音调在此刻现算，而不是排延时的时候——
+                        // 延时本身会被倍率压缩，等它到期时倍率可能已经变了。
+                        VnStoryAudio.Play(category, audioKey, volume, EffectiveAudioPitch(category, pitch));
                         // 记录 音频Key 与类别
                         _dicSfxFieldTitleToAudioKey[audioFieldTitle] = (audioKey, category);
                         // 从 延迟播放的 句柄列表中 移除
@@ -2193,7 +2204,7 @@ namespace Ale.VnFramework
                 else
                 {
                     // 立即 播放音频
-                    VnStoryAudio.Play(category, audioKey, volume, pitch);
+                    VnStoryAudio.Play(category, audioKey, volume, EffectiveAudioPitch(category, pitch));
                     // 记录 音频Key 与类别
                     _dicSfxFieldTitleToAudioKey[audioFieldTitle] = (audioKey, category);
                 }
@@ -2218,7 +2229,57 @@ namespace Ale.VnFramework
                 VnStoryAudio.Stop(kvp.Value.Category, kvp.Value.Key);
             }
             _dicSfxFieldTitleToAudioKey.Clear();
+            // 延时被 Kill 掉了，回调不会执行，计数只能在这里归零
+            _pendingVoiceDelayCount = 0;
         }
+
+        #region 语音状态
+        // 已排期但尚未响起的语音条数。见 PlaySfxByParam 里的说明。
+        private int _pendingVoiceDelayCount;
+
+        /// <summary>
+        /// 本行是否还有语音「没播完」——包括**已排期但还没响起**的延迟语音。
+        /// 自动播放据此决定要不要继续等。
+        ///
+        /// <para>后端没有实现 <see cref="IVnAudioPlaybackInfo"/> 时，
+        /// <see cref="VnStoryAudio.IsPlaying"/> 恒返回 false（并告警一次），
+        /// 于是本方法只剩「延迟尚未到期」这一路判断，自动播放退化为
+        /// 「打字机结束 + 停留时长」——这正是想要的降级方向。</para>
+        /// </summary>
+        public bool IsLineVoicePlaying()
+        {
+            if (_pendingVoiceDelayCount > 0) return true;
+
+            foreach (var kvp in _dicSfxFieldTitleToAudioKey)
+            {
+                if (kvp.Value.Category != EVnAudioCategory.Voice) continue;
+                if (VnStoryAudio.IsPlaying(EVnAudioCategory.Voice, kvp.Value.Key)) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 把演出倍率作用到<b>已经在播</b>的语音上。新播的语音由
+        /// <see cref="EffectiveAudioPitch"/> 在播放瞬间直接算进 pitch，不走这里。
+        /// </summary>
+        private void ApplyPlaybackRateToVoice(float rate)
+        {
+            foreach (var kvp in _dicSfxFieldTitleToAudioKey)
+            {
+                if (kvp.Value.Category != EVnAudioCategory.Voice) continue;
+                VnStoryAudio.SetPlaybackRate(EVnAudioCategory.Voice, kvp.Value.Key, rate);
+            }
+        }
+
+        /// <summary>
+        /// 播放时的实际音调 = 剧本配的音调 × 演出倍率（**仅语音**）。
+        ///
+        /// <para>只给语音倍速，是因为 pitch 变速必然变调：BGM 与环境音一旦被拉成 5 倍速就成了噪音，
+        /// 主流 VN 的快进也不会去动音乐。需求里点名要倍速的也只有「语音播放速度」。</para>
+        /// </summary>
+        private static float EffectiveAudioPitch(EVnAudioCategory category, float pitch)
+            => category == EVnAudioCategory.Voice ? pitch * VnPlaybackRate.Playback : pitch;
+        #endregion
         #endregion
         #endregion
 

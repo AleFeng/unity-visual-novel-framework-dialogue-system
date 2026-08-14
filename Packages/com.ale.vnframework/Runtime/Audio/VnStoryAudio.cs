@@ -37,6 +37,9 @@ namespace Ale.VnFramework
         private static void ResetStatics()
         {
             _backend = null;
+            // 告警去重标记同样要清：不清的话，上一次会话已经提醒过，这一次就再也不提醒了，
+            // 而后端可能刚好在这一次换成了不支持查询的实现。
+            _warnedNoPlaybackInfo = false;
         }
 
         /// <summary>
@@ -74,5 +77,49 @@ namespace Ale.VnFramework
         /// <summary>按 Key 停止音频。</summary>
         public static void Stop(EVnAudioCategory category, string audioKey)
             => Backend.Stop(category, audioKey);
+
+        #region 可选能力：播放状态与倍速
+        // 「后端不支持播放查询」只值得说一次。每行对话都提醒会把控制台淹掉。
+        private static bool _warnedNoPlaybackInfo;
+
+        /// <summary>
+        /// 当前后端是否额外实现了 <see cref="IVnAudioPlaybackInfo"/>。
+        /// 为 false 时 <see cref="IsPlaying"/> 恒返回 false、<see cref="SetPlaybackRate"/> 是空操作。
+        /// </summary>
+        public static bool SupportsPlaybackInfo => Backend is IVnAudioPlaybackInfo;
+
+        /// <summary>
+        /// 该 Key 是否仍在播放。后端未实现 <see cref="IVnAudioPlaybackInfo"/> 时返回 <c>false</c> 并告警一次。
+        ///
+        /// <para><b>返回 false 的含义对调用方是「不用再等了」</b>——自动播放据此退化为
+        /// 「打字机结束 + 停留时长」。这个方向是有意选的：查不到就当已经播完，
+        /// 演出继续往前走；反过来（查不到当作还在播）会让自动播放永远卡住。</para>
+        /// </summary>
+        public static bool IsPlaying(EVnAudioCategory category, string audioKey)
+        {
+            if (string.IsNullOrEmpty(audioKey)) return false;
+
+            if (Backend is IVnAudioPlaybackInfo info) return info.IsPlaying(category, audioKey);
+
+            if (!_warnedNoPlaybackInfo)
+            {
+                _warnedNoPlaybackInfo = true;
+                Debug.LogWarning("[VnStoryAudio] 当前音频后端没有实现 IVnAudioPlaybackInfo，" +
+                                 "无法判断语音是否播完。自动播放将退化为「打字机结束 + 停留时长」，" +
+                                 "快进时语音也不会跟着倍速。本提示只出现一次。");
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 设置该 Key 的播放倍速（通常经 pitch，会同时改变音高）。后端未实现时为空操作，不告警——
+        /// <see cref="IsPlaying"/> 已经提醒过一次，快进时每行再刷一遍没有意义。
+        /// </summary>
+        public static void SetPlaybackRate(EVnAudioCategory category, string audioKey, float rate)
+        {
+            if (string.IsNullOrEmpty(audioKey)) return;
+            if (Backend is IVnAudioPlaybackInfo info) info.SetPlaybackRate(category, audioKey, rate);
+        }
+        #endregion
     }
 }

@@ -13,8 +13,14 @@ namespace Ale.VnFramework
     ///
     /// <para>Fs 的 <c>AudioManager</c> 本身按通道 / 按 Key 组织，不区分音频类别，
     /// 故 <c>category</c> 在这里被忽略；换成需要分类路由的后端时可直接用上。</para>
+    ///
+    /// <para>本类同时实现了可选的 <see cref="IVnAudioPlaybackInfo"/>，因此自动播放能精确等到
+    /// 语音播完、快进也能带上语音。它依赖 Fs <c>AudioManager</c> 的 <c>IsPlaying(key)</c> 与
+    /// <c>SetPitch(key, pitch)</c>——这两个方法是随本次接入一并加到 Fs 的
+    /// （<c>com.fs.gameframework</c> ≥ 0.9.4）。<b>Fs 版本过旧会编译不过</b>，
+    /// 报 <c>AudioManager</c> 没有这两个方法，升级 Fs 即可。</para>
     /// </summary>
-    public sealed class FsVnAudioBackend : IVnAudioBackend
+    public sealed class FsVnAudioBackend : IVnAudioBackend, IVnAudioPlaybackInfo
     {
         /// <summary>
         /// 启动时自动注册。与 Ale Toolkit 的 <c>AddressableAssetLoader</c> 是同一套做法：
@@ -61,6 +67,27 @@ namespace Ale.VnFramework
             var manager = Manager;
             if (manager) manager.Stop(audioKey);
         }
+
+        #region 可选能力：播放状态与倍速
+        /// <summary>
+        /// 该 Key 是否仍在播放。取不到管理器时返回 false——契约是「查不到就当已播完」，
+        /// 让演出继续往前走，而不是把自动播放永远卡住。
+        /// </summary>
+        public bool IsPlaying(EVnAudioCategory category, string audioKey)
+        {
+            var manager = Manager;
+            return manager && manager.IsPlaying(audioKey);
+        }
+
+        /// <summary>
+        /// 设置该 Key 的播放倍速。Fs 侧经 <c>AudioSource.pitch</c> 实现，故<b>会同时改变音高</b>。
+        /// </summary>
+        public void SetPlaybackRate(EVnAudioCategory category, string audioKey, float rate)
+        {
+            var manager = Manager;
+            if (manager) manager.SetPitch(audioKey, rate);
+        }
+        #endregion
     }
 }
 #endif
