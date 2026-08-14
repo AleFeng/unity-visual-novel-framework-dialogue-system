@@ -7,7 +7,7 @@ using Ale.Toolkit.Runtime;
 using PixelCrushers;
 using PixelCrushers.DialogueSystem;
 
-#if HAS_LOCALIZATION
+#if ATK_LOCALIZATION
 using UnityEngine.Localization;
 using UnityEngine.Localization.Settings;
 #endif
@@ -59,7 +59,7 @@ namespace Ale.VnFramework
             // 初始化 背景
             InitBackground();
             
-#if HAS_LOCALIZATION
+#if ATK_LOCALIZATION
             // 初始化 多语言
             AwakeLocalization();
 #endif
@@ -78,7 +78,7 @@ namespace Ale.VnFramework
             // 注销持久化数据
             PersistentDataManager.UnregisterPersistentData(gameObject);
             
-#if HAS_LOCALIZATION
+#if ATK_LOCALIZATION
             // 销毁 多语言
             OnDestroyLocalization();
 #endif
@@ -1976,7 +1976,7 @@ namespace Ale.VnFramework
         #endregion
 
         #region 多语言
-#if HAS_LOCALIZATION
+#if ATK_LOCALIZATION
         /// <summary>
         /// 初始化 多语言
         /// </summary>
@@ -1999,13 +1999,26 @@ namespace Ale.VnFramework
         }
         
         /// <summary>
-        /// 多语言 变更 事件处理
+        /// 多语言 变更 事件处理。把 Unity Localization 选中的语言代码同步给 Dialogue System。
+        ///
+        /// <para>⚠️ 这里的 <c>Localization</c> 是 <c>PixelCrushers.DialogueSystem.Localization</c>，
+        /// 不是 <c>UnityEngine.Localization</c>。给它赋值有个从调用点看不出来的副作用：
+        /// DS 的 setter 会在 DialogueManager 物体上<b>自动挂一个 <c>UILocalizationManager</c> 组件</b>
+        /// （若尚未存在），并把它的 currentLanguage 一并设过去。</para>
+        ///
+        /// <para>Unity Localization 只负责提供这个语言代码字符串；真正的取值全在 DS 内部完成——
+        /// 对白按<b>裸语言代码</b>字段查找，其余字段按「标题 + 空格 + 语言代码」查找。</para>
         /// </summary>
-        /// <param name="locale"></param>
+        /// <param name="locale">变更后的语言。为 null 时（如初始化时的主动调用）从 LocalizationSettings 现取。</param>
         protected virtual void OnSelectedLocaleChanged(Locale locale)
         {
+            // 可用语言表为空、或 Localization 尚未初始化完成时，SelectedLocale 会是 null，
+            // 直接取 .Identifier.Code 会抛 NRE。取不到语言代码就维持 DS 的现状（默认语言）。
+            var code = (locale ?? LocalizationSettings.SelectedLocale)?.Identifier.Code;
+            if (string.IsNullOrEmpty(code)) return;
+
             // 更新 当前语言 代码
-            Localization.language = LocalizationSettings.SelectedLocale.Identifier.Code;
+            Localization.language = code;
         }
 #endif
         #endregion
