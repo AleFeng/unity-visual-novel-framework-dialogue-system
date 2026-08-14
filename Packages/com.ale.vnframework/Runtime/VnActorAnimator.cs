@@ -15,12 +15,27 @@ namespace Ale.VnFramework
     public class VnActorAnimator : MonoBehaviour, IVnPlaybackRateReceiver
     {
 #if UNITY_EDITOR
+        /// <summary>
+        /// 组件被添加到物体上、或在 Inspector 里点 Reset 时，从自身与子物体上把两个引用自动补齐，
+        /// 省掉手工拖拽。<b>仅编辑期</b>——<c>Reset</c> 是 Unity 的编辑器回调，运行时不会被调用，
+        /// 故整段包在 <c>UNITY_EDITOR</c> 内，不进发行版程序集。
+        ///
+        /// <para>只在字段为空时才填：Reset 也会在使用者主动重置组件时触发，
+        /// 但那时预制体上多半已经手工指过特定的播放器 / 粒子根，无条件覆盖会把配置冲掉。</para>
+        /// </summary>
         private void Reset()
         {
             // 获取 动画播放器。FindFor 取包内三种查找顺序的并集，且含未激活对象
             if (!actorAnimator)
             {
                 actorAnimator = AnimatorBase.FindFor(this);
+            }
+
+            // 获取 粒子系统根节点。带 true 以包含未激活对象——角色 / 特效预制体经常是
+            // 先 Instantiate 再 SetActive(true) 的，编辑期在预制体里看时子物体也可能是关着的。
+            if (!particleSystemRoot)
+            {
+                particleSystemRoot = GetComponentInChildren<ParticleSystem>(true);
             }
         }
 #endif
@@ -618,7 +633,7 @@ namespace Ale.VnFramework
         private bool DestroyParticleSystem(out float delay)
         {
             delay = -1f;
-            if (particleSystemRoot == null) return false;
+            if (!particleSystemRoot) return false;
 
             return StopParticlesAndGetDelay(particleSystemRoot.gameObject, out delay);
         }
