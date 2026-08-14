@@ -92,16 +92,22 @@ namespace Ale.VnFramework
         /// </summary>
         public void StartVnStory(string conversationName = null)
         {
-            if (_isVnStoryStarted) return;
-            _isVnStoryStarted = true;
-            
-            // 淡入 UI
-            FadeInUI();
-            // 淡入 背景;
-            FadeInBackground();
-            // 淡入 角色、特效
-            FadeInActorsAndEffects();
-            
+            // 会话级的淡入只做一次；重复调用时跳过，但不能连带把下面的「开始对话」也吞掉。
+            // 一度是整个方法早退，于是：剧情自然播完后 _isVnStoryStarted 无人清除
+            // （自然结束不经过 StopVnStory，VnStoryPlayer 也只翻自己的 IsPlaying），
+            // 此后再播任何一段剧情都是静默空操作。
+            if (!_isVnStoryStarted)
+            {
+                _isVnStoryStarted = true;
+
+                // 淡入 UI
+                FadeInUI();
+                // 淡入 背景;
+                FadeInBackground();
+                // 淡入 角色、特效
+                FadeInActorsAndEffects();
+            }
+
             // 开始 指定的对话演出
             if (!string.IsNullOrEmpty(conversationName))
                 StartStoryConversation(conversationName);
@@ -278,6 +284,8 @@ namespace Ale.VnFramework
             else if (uiCanvas)
             {
                 uiCanvas.gameObject.SetActive(true);
+                // 与 FadeOutUI 的兜底路径成对：那里断掉了射线，这里必须收回来，否则淡出过一次 UI 就永久失灵。
+                SetUiRaycasterEnabled(true);
             }
         }
         
@@ -306,12 +314,33 @@ namespace Ale.VnFramework
             }
             else if (uiCanvas)
             {
-                // uiCanvasGroup不可用
-                uiCanvasGroup.interactable = false; // 不可交互
-                uiCanvasGroup.blocksRaycasts = false; // 不接收射线
+                // 走到这里的前提就是 uiCanvasGroup 为空——此处一度仍在给 uiCanvasGroup 赋值，
+                // 必然 NRE，且异常发生在 onComplete 之前，对话因此永远停不下来。
+                //
+                // 没有 CanvasGroup 就没有 alpha 可淡、也没有 interactable 可关，能做的只有断掉射线。
+                // 不用 SetActive(false)：上面那条注释说得很清楚，DialogueSystem 需要 uiCanvas 保持激活。
+                // GraphicRaycaster.enabled 正是 blocksRaycasts 的对应物，且不动激活状态。
+                SetUiRaycasterEnabled(false);
                 // 完成回调
                 onComplete?.Invoke();
             }
+            else
+            {
+                // 两者都没配：没有可淡出的东西，但回调仍必须触发，
+                // 否则 StopVnStory 里的 StopStoryConversation 永远不会执行。
+                onComplete?.Invoke();
+            }
+        }
+
+        /// <summary>
+        /// 开关 <see cref="uiCanvas"/> 上的射线投射器。仅用于没有 <see cref="uiCanvasGroup"/> 的兜底路径，
+        /// 承担 <c>CanvasGroup.blocksRaycasts</c> 的角色。组件缺席时静默跳过。
+        /// </summary>
+        private void SetUiRaycasterEnabled(bool enable)
+        {
+            if (!uiCanvas) return;
+            var raycaster = uiCanvas.GetComponent<GraphicRaycaster>();
+            if (raycaster) raycaster.enabled = enable;
         }
         #endregion
         
@@ -843,9 +872,14 @@ namespace Ale.VnFramework
                     srBackgroundLast.sprite = null;
                     srBackgroundLast.gameObject.SetActive(false);
                 }
-                
+
                 _tweenClearAllBackground = default;
             }, unscaled: false);
+
+            // 背景已经淡到 alpha 0 并隐藏，状态上等同于「已淡出」，标记必须一并清掉。
+            // 否则下次 FadeInBackground 会在开头早退：backgroundFadeDuration 为 0 时
+            // 背景被赋值却停在 alpha 0，画面上什么都看不见。
+            _isBackgroundFadeIn = false;
         }
         
         #region 设置背景
@@ -1724,10 +1758,13 @@ namespace Ale.VnFramework
                 _bgmDelayTweens[i].Kill();
             }
             _bgmDelayTweens.Clear();
-            // 停止所有 记录的 背景音乐Key
+            // 停止所有 记录的 背景音乐通道
+            // 用通道路径停、而不是 Key 路径：BGM 是经 PlayWithChannel(Bgm, 字段标题, …) 播出的，
+            // 字典的 Key 才是通道名（Value 是音频 Key）。IVnAudioBackend 明确区分这两条路径，
+            // 按 Key 停一条按通道播出的 BGM，在任何合规后端上都停不掉——当前是空后端，故听不出来。
             foreach (var kvp in _dicBgmFieldTitleToAudioKey)
             {
-                VnStoryAudio.Stop(EVnAudioCategory.Bgm, kvp.Value);
+                VnStoryAudio.StopWithChannel(EVnAudioCategory.Bgm, kvp.Key);
             }
             _dicBgmFieldTitleToAudioKey.Clear();
         }
