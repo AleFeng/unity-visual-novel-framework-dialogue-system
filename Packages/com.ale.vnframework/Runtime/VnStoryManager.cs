@@ -321,6 +321,11 @@ namespace Ale.VnFramework
         // 已加载的资源 计数器。
         private readonly Dictionary<string, int> _dicLoadedAssetCounter = new Dictionary<string, int>();
         // 已加载的资源表。
+        // ⚠️ 只以地址为键、值类型是 UnityEngine.Object，而 LoadAsset 的泛型形参 T 随调用点变化
+        // （头像用 Object、背景用 Sprite、角色与特效用 GameObject）。同一个地址若被两种 T 请求，
+        // 第二次的 `loadedAsset as T` 会对一个完好的资源静默返回 null。
+        // 目前四类资源的地址前缀（ActorsHead/ Backgrounds/ Actors/ Effects/）互不重叠，故不会发生；
+        // 若将来出现共用地址的情况，这里要改成以 (地址, 类型) 为键。
         private readonly Dictionary<string, UnityEngine.Object> _dicLoadedAssets = new Dictionary<string, UnityEngine.Object>();
         // 加载中的资源 请求卸载的计数器（加载完成后应立即卸载的次数）。
         private readonly Dictionary<string, int> _dicPendingUnloadAfterLoad = new Dictionary<string, int>();
@@ -336,14 +341,24 @@ namespace Ale.VnFramework
         /// <typeparam name="T"></typeparam>
         private void LoadAsset<T>(string assetAddress, Action<T> onAssetLoaded) where T : UnityEngine.Object
         {
-            // 检查 资源是否已经加载
+            // 检查 资源是否已经加载。
+            // 注意判活方式：Dictionary 里存着键就会让 TryGetValue 返回 true，哪怕值是 null 或
+            // 已被销毁的对象（Unity 的「假 null」——托管引用还在，但重载的 == 判定为 null）。
+            // 这两种情况都必须当成未命中重新加载，否则该地址会被永久毒化、再也不会真正加载一次。
             if (_dicLoadedAssets.TryGetValue(assetAddress, out var loadedAsset))
             {
-                // 增加 已加载资源计数器
-                _dicLoadedAssetCounter[assetAddress] = _dicLoadedAssetCounter.GetValueOrDefault(assetAddress, 0) + 1;
-                // 资源已经加载，直接调用回调
-                onAssetLoaded?.Invoke(loadedAsset as T);
-                return;
+                if ((UnityEngine.Object)loadedAsset)
+                {
+                    // 增加 已加载资源计数器
+                    _dicLoadedAssetCounter[assetAddress] = _dicLoadedAssetCounter.GetValueOrDefault(assetAddress, 0) + 1;
+                    // 资源已经加载，直接调用回调
+                    onAssetLoaded?.Invoke(loadedAsset as T);
+                    return;
+                }
+
+                // 死条目：清掉它与配套计数，落到下面走一次真正的加载。
+                _dicLoadedAssets.Remove(assetAddress);
+                _dicLoadedAssetCounter.Remove(assetAddress);
             }
 
             // 增加 资源加载计数器
@@ -367,6 +382,10 @@ namespace Ale.VnFramework
                     SetContinueButtonActive(true);
                 }
                 
+                // 加载是否成功。泛型形参 T 拿不到 UnityEngine.Object 的 bool 重载，必须先上转型再判空
+                // （与 ToolkitAssets 内部同一写法）。ToolkitAssets 约定：加载失败时回调传入 null。
+                bool succeeded = (UnityEngine.Object)asset;
+
                 // 如果在加载过程中，有人请求卸载（pending unload），则立即卸载并不要把资源记录为已加载，也不要调用回调。
                 var pendingCount = _dicPendingUnloadAfterLoad.GetValueOrDefault(assetAddress, 0);
                 if (pendingCount > 0)
@@ -375,9 +394,19 @@ namespace Ale.VnFramework
                     pendingCount -= 1;
                     if (pendingCount <= 0) _dicPendingUnloadAfterLoad.Remove(assetAddress);
                     else _dicPendingUnloadAfterLoad[assetAddress] = pendingCount;
-                    // 卸载资源
-                    ToolkitAssets.ReleaseAddress(assetAddress);
+                    // 卸载资源。仅在确实加载成功时才释放——失败时后端根本没持有句柄，
+                    // 空放会让加载器的引用计数错位。
+                    if (succeeded) ToolkitAssets.ReleaseAddress(assetAddress);
 
+                    return;
+                }
+
+                // 加载失败：不入缓存、不加计数、也不释放（没持有过句柄），但仍然回调，
+                // 让调用方走自己的失败分支。若把 null 写进 _dicLoadedAssets，下次同地址会命中缓存
+                // 直接回传 null，导致该地址再也不会重试加载。
+                if (!succeeded)
+                {
+                    onAssetLoaded?.Invoke(null);
                     return;
                 }
 
@@ -385,7 +414,7 @@ namespace Ale.VnFramework
                 _dicLoadedAssetCounter[assetAddress] = _dicLoadedAssetCounter.GetValueOrDefault(assetAddress, 0) + 1;
                 // 记录已加载的资源
                 _dicLoadedAssets[assetAddress] = asset;
-                
+
                 // 调用原始回调
                 onAssetLoaded?.Invoke(asset);
             };
@@ -401,8 +430,8 @@ namespace Ale.VnFramework
         {
             if (string.IsNullOrEmpty(assetAddress)) return;
             
-            // 检查 是否 已加载资源
-            if (_dicLoadedAssets.TryGetValue(assetAddress, out var loadedAsset))
+            // 检查 是否 已加载资源。这里只关心「该地址是否登记过」，取不到值也无所谓，故用 ContainsKey。
+            if (_dicLoadedAssets.ContainsKey(assetAddress))
             {
                 // 减少 已加载资源计数器
                 _dicLoadedAssetCounter[assetAddress] = _dicLoadedAssetCounter.GetValueOrDefault(assetAddress, 1) - 1;
