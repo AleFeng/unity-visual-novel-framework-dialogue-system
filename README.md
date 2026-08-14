@@ -141,7 +141,7 @@ https://github.com/AleFeng/unity-visual-novel-framework-dialogue-system.git?path
 这样装的是 `main` 的最新提交。**要固定版本，把 `#<tag>` 加在整条 URL 的最末尾**（必须在 `?path=` 之后）：
 
 ```
-https://github.com/AleFeng/unity-visual-novel-framework-dialogue-system.git?path=/Packages/com.ale.vnframework#1.2.0
+https://github.com/AleFeng/unity-visual-novel-framework-dialogue-system.git?path=/Packages/com.ale.vnframework#1.3.0
 ```
 
 可用的 tag 见 [Releases](https://github.com/AleFeng/unity-visual-novel-framework-dialogue-system/releases)。
@@ -268,12 +268,17 @@ Tools > Ale Toolkit > VN Framework > Welcome
 | `ATK_LOCALIZATION` | 把 Unity Localization 选中的语言代码同步给 Dialogue System | **Ale Toolkit 欢迎窗口**的「插件支持」 |
 | `ATK_ADDRESSABLE` | 资源经 `ToolkitAssets` 走 Addressables，否则回落 `Resources` | 同上 |
 | `VNS_FS_GAMEFRAMEWORK` | 把 `VnStoryAudio` 接到 Fs 的 `AudioManager` | **本包欢迎窗口**的「插件支持」 |
+| `VNS_VERBOSE_LOG` | 让演出流水日志（切头像 / 切背景 / 加载角色）在**发行版**里也输出 | 需要时自行在 Project Settings 添加 |
 
 > 自 1.1.0 起，本插件**不再使用 `HAS_TMPRO` / `HAS_LOCALIZATION`**。前者由 `com.fs.gameframework`
 > 维护，没装 Fs 的工程里不会被定义、功能会静默关闭；现已改用 Ale Toolkit 的 `ATK_*` 一族
 > （TMP 那一路更是连宏都不需要了——文本字段放宽为 `Graphic`，TMP 与 UGUI Text 通吃）。
 >
 > ⚠️ `VNS_FS_GAMEFRAMEWORK` 默认关闭，**此时剧情全程无声**。详见[详细文档](Packages/com.ale.vnframework/README.md#音频接缝)。
+>
+> `VNS_VERBOSE_LOG` 是 1.3.0 新增的**日志开关**，与功能无关：那几条流水日志在编辑器内始终输出，
+> 发行版默认静默（经 `[Conditional]` 在编译期连同插值字符串一起消除，不是运行时判断）。
+> 排查线上问题时再加它。
 >
 > 切换宏后需等待 Unity 重新编译生效。
 
