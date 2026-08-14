@@ -9,6 +9,101 @@
 > `PixelCrushers.DialogueSystem.VnStoryFramework` → `Ale.VnFramework`。脚本 `.meta` 的 GUID 全部保留，
 > 既有场景与预制体的组件引用不受影响。**升级前请先读下方「⚠ 前置条件」。**
 
+## [1.5.0] - 2026-08-15
+
+补上文字冒险游戏右下角那排**播放控制**按钮：自动播放、播放速度、快进、新对话停止、隐藏 UI，
+以及背后的已读记录与存档接口。**Dialogue System 一行代码都没改**（它是 gitignore 的付费资产），
+全部走它自带的公开接缝。
+
+### 新增
+
+- **`VnPlaybackController`**（与 `VnStoryManager` 同物体）——五个功能的状态持有者：
+  - **自动播放**（默认关）：一句台词「打字机显示完 **且** 语音播完」，再等停留时长（默认 1 秒）后自动推进。
+  - **播放速度** 1x / 2x / 3x（默认 1x，点击循环）：只影响台词打字机。
+  - **快进**：长按生效、松开退出，倍率可配（默认 5x），覆盖打字机、补间、延时、角色 Animator、粒子与语音。
+  - **新对话停止**（默认开）：快进中遇到从未出现过的对话节点即中止快进。
+  - **隐藏 UI**：藏起全部界面，点屏幕任意位置恢复。
+- **`VnPlaybackRate` + `VnTween`**：倍率权威与倍率感知的补间层。演出层 25 处 `ToolkitTween` 调用改道，
+  背景交叉淡的手写协程、角色 `Animator.speed`、粒子 `simulationSpeed` 一并接入。
+- **`VnReadHistory` / `VnReadHistoryCodec`**：已读判定复用 DS 的 `SimStatus`，持久化用自研位图编码。
+- **存档 Get / Set**：`VnStoryManager` 实现 `ISaveable`，提供 `GetSaveData` / `LoadSaveData` / `ResetAll`。
+  **本包不落盘**，Load / Save 归宿主的存档系统。
+- **`IVnAudioPlaybackInfo`**：可选的音频后端能力（查询是否在播 + 设置倍速）。不实现不报错，
+  只是自动播放退化为「打字机结束 + 停留时长」、快进时语音不倍速。Fs 后端已实现
+  （需要 `com.fs.gameframework` ≥ 0.9.4，本次一并给它加了 `IsPlaying` / `SetPitch`）。
+- **`VnPlaybackButton` / `VnUiHider`** 与 14 张白色简约图标（每个功能开 / 关两态，开态带外发光），
+  样例的 `DialogueUI_Main` 右下角已接好。图标由 `Tools~/icons/generate_icons.py` 程序化生成、可重跑。
+
+### 变更
+
+- **修正一处历史误述**：`package.json` 描述与根 README 特性表此前写着「自动播放与跳过」，
+  但代码里唯一的 auto play 是 `VnStoryPlayer.AutoPlayTiming`——它管的是**何时开始一段对话**，
+  与本次的逐句自动推进不是一回事。文档已把两者分开叙述，包内 README 的
+  `### 播放控制（VnStoryPlayer）` 也改名为 `### 剧情启停（VnStoryPlayer）`。
+- 样例的 `VnStoryManagerBase` 预制体勾上了 Dialogue Manager 的 **Include SimStatus**（见下）。
+
+### 四条反直觉的事实（备查）
+
+**① 不勾 `Include SimStatus` 会 fail-open 成全量误报，不是「功能不生效」。**
+`DialogueLua.GetSimStatus` 在开关关闭时**对任何节点都返回 `Untouched`**，于是每一行都被判成未读，
+「新对话停止」会在快进按下的第一行就触发——现象是「快进一按就停」，很容易误判成快进坏了。
+代码里有运行时补开 + 告警一次，但那段设置**必须放在 `Start` 而不是 `Awake`**：
+`DialogueSystemController` 与本管理器在同一个物体上，两者 `Awake` 先后未定义，
+而它的 `Awake` 里会把 `DialogueLua.includeSimStatus` 覆写回 Inspector 的值。
+
+**② 勾上 `Include SimStatus` 的副作用是 DS 存档暴涨，必须同时把 `PersistentDataManager.includeSimStatus` 关掉。**
+`DialogueSystemController.Awake` 会做 `PersistentDataManager.includeSimStatus = DialogueLua.includeSimStatus`，
+不关的话 DS 会为**每个节点**再往自己的存档串写一份 `Conversation[N].SimX="..."`——
+与本包的位图是同一份数据的两次存储，而且是最啰嗦的那种编码。正确答案是「勾上 + 代码里关掉后者」。
+
+**③ 自动播放不能只写 `while (typewriter.isPlaying)`，会整行跳过。**
+调用顺序是 `NotifyParticipantsOnConversationLine`（我们的处理器在此被拉起）→ `ShowSubtitle`
+→ `SetContent` → `StartTyping`，**我们跑在打字机起播之前**，那一刻 `isPlaying` 还是 false。
+必须用「观察到在播」作闩，配合起播宽限窗兜底。
+同理也**不能用 `OnConversationLineEnd` 当「本行播完」的信号**：DS 的 `FinishSubtitle()` 开头就是
+`if (!waitForContinue)`，而 `continueButton = Always` 时每行都在等继续，那个消息要等玩家点了才发——
+正好是我们要产生的动作，用它会成环。
+
+**④ 标点停顿不跟着缩放的话，速度档基本是假的。**
+打字机的 `fullPauseDuration` / `quarterPauseDuration` 是**绝对秒数**，不随字速变。
+样例配的是句号停 1 秒、逗号停 0.3 秒——一句 30 字的中文台词打字 1.5 秒、标点却要停 1.6 秒，
+只调字速的话 3 档速实际只有约 1.48 倍。好在这两个值是每次逐字循环重读的，可以中途改且不跳变；
+但基准值**只能在收集打字机时采一次**，等倍率非 1 时再读就已经被污染了。
+
+### 已知限制
+
+- **Spine / Live2D 的状态动画吃不到倍率**。`AnimatorBase` 没有实时时间缩放 API，
+  速度在起播时就被烘进后端轨道项了。Unity `Animator.speed` 与粒子 `simulationSpeed` 正常跟随。
+  补齐的位置在 `com.ale.animsimulatorsystem`，不在本包。
+- **剧本 `Sequence` 里手写的 `Delay()` / `AudioWait()` 不会被压缩**（理由见下节）。
+- **已读记录以「会话 ID + 节点 ID」为下标**，整库重导入（Chat Mapper / articy / CSV）会让 ID 重编号。
+  存档里带了剧本结构指纹，不匹配时丢弃记录并告警，而不是静默错位。日常追加剧情、删节点不受影响。
+- **中途改字速会跳字**（DS 打字循环的行为）。本包只在行边界写字速、进快进时先 `Stop()` 当前行，
+  正常使用中看不到。
+- 没有 `EventSystem` 时**隐藏 UI 会被拒绝**并报错——藏起来之后点不了任何东西，那是软锁。
+- **没挂 `VnActorAnimator` 的纯图片 / 纯粒子预制体走绝对赋值**（`simulationSpeed = 倍率`）而非
+  「作者基准 × 倍率」，因为管理器不为这类实例缓存基准，相乘会在连续变速时累乘。
+  需要保住自定义基准速度的，给预制体挂上 `VnActorAnimator`。
+- **资源加载门在直接模式下测不出来**：未开 `ATK_ADDRESSABLE` 时 `ToolkitAssets` 是同步回调，
+  计数器在 `LoadAsset` 返回前就已清空，`IsLoadingAssets` 恒为 false。接异步 Addressables 后端后需重验。
+
+### 评估后决定不做
+
+- **接管 `DialogueTime`（`TimeMode.Custom`）来做全局倍速。** 它能让 DS 的全部时序——包括剧本里
+  手写的 `Delay()` / `AudioWait()`——平滑倍速，且中途变速不跳字，确实比逐项乘算更彻底。
+  但 `DialogueTime` 是 DS 的**全局静态量**，接管之后必须每帧驱动；组件被禁用、销毁或抛异常导致
+  驱动中断，DS 时间就会冻结、对话彻底卡死。为了压缩少数手写 `Delay()` 而引入一个「一失手就卡死」
+  的全局依赖，不划算。
+- **复用 DS 自带的 `ConversationControl.SkipAll()` 做快进。** 它的实现是往每行 sequence 前插
+  `"Continue(); "`，是**瞬间跳过**而非倍速——与需求要的「5 倍速播放」是两种东西。
+  但它的 `stopSkipAllOnUnreadSubtitle` 那套 `preparingConversationLine` + SimStatus 的机制是对的，
+  本包复用了**机制**、没有复用组件。
+- **给已读记录做「按字段做稳定 ID」**（DS 为自己的存档提供了 `saveConversationSimStatusWithField`）。
+  那会让编码从紧凑位图退回「每条一个字符串键值对」，把省下的一个数量级又赔回去。
+  改用剧本指纹校验 + 丢弃告警，成本几十字节。
+- **快进时给 BGM / 环境音也变调。** pitch 变速必然变调，音乐拉成 5 倍速就是噪音，
+  主流 VN 的快进也不动音乐。只给语音倍速（需求点名的也只有「语音播放速度」）。
+
 ## [1.4.0] - 2026-08-14
 
 把 **Ale Toolkit 的条件系统**接进对话节点的 Conditions：任何系统只要实现了判定器，

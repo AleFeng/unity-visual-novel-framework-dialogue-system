@@ -71,10 +71,15 @@ Dialogue System 负责对话数据、分支逻辑与 Lua 环境；本插件把�
   批量翻译走 Dialogue System 自带的 CSV 导出 / 导入，见
   [使用文档 · 多语言的导出与导入](Docs~/VnStoryManager/VnStoryManager.md#多语言的导出与导入)。
 
-### 播放控制（`VnStoryPlayer`）
+### 剧情启停（`VnStoryPlayer`）
 
 挂在任意 GameObject 上，按对话名启停某段剧情。可在 Inspector 配置对话名与自动播放时机
 （嵌套枚举 `AutoPlayTiming`），也可由 `Button.OnClick` 或脚本触发。
+
+> ⚠️ **`AutoPlayTiming` 管的是「什么时候**开始**一段对话」**（`Manual` / `OnStart` / `OnEnable`），
+> 与玩家侧那个「一句台词播完自动进下一句」的自动播放**不是一回事**——后者在
+> [播放控制](#播放控制) 章节，由 `VnPlaybackController` 负责。
+> 1.5.0 之前的文档把两者都叫「自动播放」，容易误读。
 
 ```csharp
 using Ale.VnFramework;
@@ -289,6 +294,121 @@ Dialogue System 的参数类型只有 Bool / Double / String / 数据库实体�
 
 ---
 
+## 播放控制
+
+文字冒险游戏右下角那排按钮：**自动播放、播放速度、快进、新对话停止、隐藏 UI**。
+核心是 `VnPlaybackController`，与 `VnStoryManager` 挂在同一个物体上；按钮用 `VnPlaybackButton`。
+
+样例里已经接好了（`DialogueUI_Main` 预制体右下角），导入 Sample 进 Play 即可直接用。
+
+### 五个功能
+
+| 功能 | 默认 | 行为 |
+| --- | --- | --- |
+| 自动播放 | **关** | 开启后，一句台词「演完」自动进下一句。演完 = 打字机显示完 **且**（若配了语音）语音播完，再等一个可配的停留时长（默认 1 秒）。 |
+| 播放速度 | **1x** | 点一下在 1x → 2x → 3x → 1x 之间循环。**只影响台词打字机**（字速与标点停顿）。 |
+| 快进 | — | **长按**进入、松开退出。倍率可配（默认 5x），作用于打字机、补间、延时、角色 Animator、粒子与语音。 |
+| 新对话停止 | **开** | 快进中遇到**从未出现过**的对话节点时中止快进。 |
+| 隐藏 UI | — | 点一下藏起全部界面，再点屏幕任意位置恢复。 |
+
+### 三条必须知道的语义
+
+**① 快进隐含自动推进。** 需求上没写，但一个还要逐句点击的「快进」不成立：快进态下无论自动播放
+开关如何都会自动推进，且停留时长按倍率压缩。
+
+**② 快进被「新对话停止」打断后，按着不放不会自行恢复**，必须**松开再按**。
+否则玩家一路按住会在每个未读行抖动式地一停一走，等于没停。这个中间态在代码里是
+`EVnFastForwardState.Suppressed`，Inspector 与日志里都看得见。
+
+**③ 快进与速度档取 `Max`，不是相乘。** 相乘会让 3 档速的玩家按下快进拿到 15 倍；
+纯覆盖又会在「快进倍率 2、档位 3」时**反而变慢**。`Max` 保证单调不减，默认值（5 > 3）下等价于覆盖。
+
+### 已读记录
+
+「新对话停止」要知道哪些台词读过。这一层**直接复用 Dialogue System 的 `SimStatus`**
+（逐节点三态，由它在行准备时自动打标，运行时零维护成本），本包只负责**紧凑持久化**。
+
+> ⚠️ **必须勾上 Dialogue Manager 的 `Include SimStatus`**（样例预制体已勾）。
+> 不勾时 `DialogueLua.GetSimStatus` 对任何节点都返回 `Untouched`，于是**每一行都被判成未读**，
+> 表现为「快进一按就停」。本包会在运行时检测并补开 + 告警一次，但不如直接勾上。
+
+存档编码（`VnReadHistoryCodec`）：每个节点 **2 bit**，按会话打包成位图再 Base64；
+整个会话状态一致时**塌缩**成「会话 ID + 容量 + 状态」共 9 字节。1 万行剧本约 **2.4–4.4 KB**，
+而 DS 自带的 `SimX` 字符串格式同规模是 60–80 KB。
+
+留 2 bit 而不是 1 bit，是为了保住 `WasOffered` 与 `WasDisplayed` 的区别——
+DS 的 `emTagForOldResponses`（把选过的选项置灰）靠它工作。
+
+### 存档接口
+
+**本包只提供 Get / Set，不做 Load / Save**——落盘归宿主的存档系统。
+
+```csharp
+using Ale.VnFramework;
+
+// 存档时
+VnStorySaveData data = VnStoryManager.Instance.GetSaveData();   // 深拷贝
+string json = JsonUtility.ToJson(data);                          // 或 ES3 / 自定义二进制
+
+// 读档时
+VnStoryManager.Instance.LoadSaveData(JsonUtility.FromJson<VnStorySaveData>(json));
+VnStoryManager.Instance.Playback.NotifyStateChanged();           // 让按钮刷新图标
+
+// 开新游戏
+VnStoryManager.Instance.ResetAll();
+```
+
+沿用 `com.ale.toolkit` 的 `ISaveable` 四条契约：**取时深拷贝**、**载入是覆盖而非合并**、
+**容忍 `null` 与脏数据**、**三个方法都不触发变更事件**（所以读档后要自己调
+`NotifyStateChanged()` 刷界面）。
+
+> 本类只实现非泛型的 `ISaveable`，不实现 `ISaveable<TState>`——后者是 `List<TState>` 形状、
+> 为集合型系统设计，而这里是「一个设置块 + 一份已读位图」的单体聚合。
+
+### 接入自己的 UI
+
+不想用样例那套按钮的话，直接调控制器即可，方法都能挂到 `Button.OnClick`：
+
+```csharp
+var playback = VnStoryManager.Instance.Playback;
+
+playback.ToggleAutoPlay();
+playback.CycleSpeedTier();
+playback.ToggleStopOnUnread();
+playback.BeginFastForward();   // 按下时
+playback.EndFastForward();     // 松开时（务必成对，否则倍率会一直卡住）
+playback.StateChanged += RefreshMyIcons;
+```
+
+**快进必须自己保证 `Begin` / `End` 成对**。样例的 `VnPlaybackButton` 为此做了三重兜底：
+指针移出按钮、组件被禁用、对话结束，都会强制收回。
+
+### 语音：可选后端能力
+
+自动播放要等语音播完、快进要让语音倍速，这两件事需要后端支持
+**可选接口 `IVnAudioPlaybackInfo`**（查询是否在播 + 设置倍速）。
+后端不实现也不会报错，只是自动播放退化为「打字机结束 + 停留时长」、快进时语音按常速播，
+并在首次需要时告警一次。
+
+内置的 Fs 后端已经实现了它（需要 `com.fs.gameframework` ≥ 0.9.4）。
+
+### 限制
+
+- **Spine / Live2D 的状态动画吃不到倍率**。`AnimatorBase` 没有实时时间缩放 API，速度在起播时
+  就被烘进后端的轨道项了。Unity `Animator.speed` 与粒子 `simulationSpeed` 都正常跟随。
+  补齐的位置在 `com.ale.animsimulatorsystem`，不在本包。
+- **剧本 `Sequence` 里手写的 `Delay()` / `AudioWait()` 不会被压缩**。本包只逐项调自己的补间与延时，
+  不接管 Dialogue System 的全局时钟 `DialogueTime`（那是个静态量，一旦驱动中断会让 DS 时间冻结、
+  对话卡死，代价太大）。
+- **已读记录以「会话 ID + 节点 ID」为下标**，剧本被**整库重导入**（Chat Mapper / articy / CSV）
+  会让 ID 重编号、记录错位。存档里带了剧本结构指纹，不匹配时会**丢弃记录并告警**，而不是静默用错。
+  日常的追加剧情、删节点不受影响——DS 分配节点 ID 用 `max + 1` 且不回收。
+- **中途改字速会跳字**，这是 DS 打字循环的行为（`goal = elapsed × cps`，`elapsed` 从行首累计）。
+  本包只在行边界写字速，并在进入快进时先把当前行 `Stop()` 掉，正常使用中看不到。
+- **没有 `EventSystem` 时隐藏 UI 会被拒绝**并报错——藏起来之后点不了任何东西，那是软锁。
+
+---
+
 ## UI 样式
 
 样例中的 `DialogueUI_Main` 预制体给出了一整套可直接改的对话 UI：玩家对话面板与配角对话面板、
@@ -329,15 +449,28 @@ com.ale.vnframework/
 │   ├── Ale.VnFramework.asmdef   运行时程序集
 │   ├── VnStoryManager.cs        演出核心：字段条目解析、背景/角色/特效/头像/消息、
 │   │                            预制体生命周期、全局变量、玩法扩展点
-│   ├── VnStoryPlayer.cs         播放控制：按对话名启停、自动播放时机
+│   ├── VnStoryPlayer.cs         剧情启停：按对话名启停、自动播放时机（≠ 逐句自动推进）
 │   ├── VnActorAnimator.cs       角色动画对接层（→ AnimatorBase，就绪门控）
 │   ├── VnResponseButton.cs      分支选项按钮（已读 / 未读态）
 │   ├── Audio/                   可替换的音频后端
 │   │   ├── IVnAudioBackend.cs   ← 接入自己的音频系统实现这个
 │   │   ├── EVnAudioCategory     （同文件）Bgm / Ambient / Sfx / Voice
+│   │   ├── IVnAudioPlaybackInfo.cs 可选能力：查询是否在播 + 设置倍速（自动播放等语音、快进倍速语音）
 │   │   ├── VnStoryAudio.cs      静态门面，持有当前后端
 │   │   ├── NullVnAudioBackend.cs 默认空实现
 │   │   └── FsVnAudioBackend.cs  Fs 后端（VNS_FS_GAMEFRAMEWORK 门控，兼作范例）
+│   ├── Playback/                播放控制：自动播放 / 倍速 / 快进 / 新对话停止 / 隐藏UI
+│   │   ├── VnPlaybackController.cs 状态机与自动推进协程（与 VnStoryManager 同物体）
+│   │   ├── VnPlaybackRate.cs    倍率权威。打字机倍率与演出倍率分开，理由见文件注释
+│   │   ├── VnTween.cs           ToolkitTween 的倍率感知包装
+│   │   │                        ⚠ 在途补间用 Kill(false) 重起而非 Complete()——后者会同步
+│   │   │                        触发完成回调，把 StopStoryConversation / 角色出场提前引爆
+│   │   ├── IVnPlaybackRateReceiver.cs 可选契约：预制体自行跟随倍率
+│   │   ├── VnReadHistory.cs     已读记录：SimStatus 读写、惰性水合、剧本指纹
+│   │   ├── VnReadHistoryCodec.cs 2bit/节点 位图 ⇄ Base64（纯函数，无 Unity 依赖）
+│   │   ├── VnPlaybackSaveData.cs 存档 DTO
+│   │   ├── VnPlaybackButton.cs  按钮视图：开/关图切换、快进长按
+│   │   └── VnUiHider.cs         隐藏UI + 运行时自建的全屏点击捕获器（独立画布）
 │   └── Condition/               Toolkit 条件系统接入（独立程序集，按 toolkit 版本自动门控）
 │       ├── Ale.VnFramework.Condition.asmdef
 │       │                        versionDefines 从 com.ale.toolkit≥1.4.0 推出 VNS_HAS_CONDITION
@@ -551,6 +684,143 @@ public sealed class NullVnAudioBackend : IVnAudioBackend  // 单例 NullVnAudioB
 ```
 
 接入方式与注意事项见上文 [音频接缝](#音频接缝)。
+
+```csharp
+// 可选能力。后端在 IVnAudioBackend 之外**再**实现它，就能让自动播放精确等到语音播完、
+// 让快进把语音一起倍速。不实现不报错，只是这两处退化。
+public interface IVnAudioPlaybackInfo
+{
+    bool IsPlaying(EVnAudioCategory category, string audioKey);
+    void SetPlaybackRate(EVnAudioCategory category, string audioKey, float rate);
+}
+
+public static class VnStoryAudio
+{
+    public static bool SupportsPlaybackInfo { get; }   // 当前后端是否实现了上面这个接口
+    public static bool IsPlaying(EVnAudioCategory category, string audioKey);
+    public static void SetPlaybackRate(EVnAudioCategory category, string audioKey, float rate);
+}
+```
+
+### `VnPlaybackController`
+
+播放控制的状态持有者。与 `VnStoryManager` **挂在同一个物体上**（选项菜单的通知是
+`BroadcastMessage` 发到那里的，挂别处收不到）。取用：`VnStoryManager.Instance.Playback`。
+
+```csharp
+public enum EVnPlaybackSpeedTier { X1 = 1, X2 = 2, X3 = 3 }
+public enum EVnFastForwardState { Off, Active, Suppressed }   // Suppressed = 按着但已被未读行打断
+
+public class VnPlaybackController : MonoBehaviour
+{
+    public bool AutoPlay { get; set; }
+    public EVnPlaybackSpeedTier SpeedTier { get; set; }
+    public EVnFastForwardState FastForwardState { get; }
+    public bool IsFastForwarding { get; }
+    public bool StopOnUnread { get; set; }
+    public float FastForwardRate { get; set; }
+    public float AutoPlayDelay { get; set; }
+
+    public event Action StateChanged;          // 任意状态变化，供按钮刷新图标
+    public event Action FastForwardBlocked;    // 被「新对话停止」打断时
+
+    public void ToggleAutoPlay();
+    public void CycleSpeedTier();              // 1x → 2x → 3x → 1x
+    public void ToggleStopOnUnread();
+    public void BeginFastForward();            // 按下
+    public void EndFastForward();              // 松开。务必与 Begin 成对
+    public void ForceStopFastForward();
+
+    public VnPlaybackSettingsData GetSettings();
+    public void ApplySettings(VnPlaybackSettingsData data);   // 不触发 StateChanged
+    public void ResetToDefaults();                            // 同上
+    public void NotifyStateChanged();                         // 读档后手动刷一次界面
+    public void SetUiHidden(bool hidden);                     // 由 VnUiHider 调用
+}
+```
+
+### 播放倍率与补间
+
+```csharp
+public static class VnPlaybackRate
+{
+    public static float Playback { get; }      // 补间 / 延时 / 角色动画 / 粒子 / 语音
+    public static float Typewriter { get; }    // 打字机字速与标点停顿
+    public static event Action<float> PlaybackChanged;
+}
+
+// ToolkitTween 的倍率感知包装。演出层一律走它；签名与 ToolkitTween 逐字一致。
+public static class VnTween { /* FadeCanvasGroup / FadeSpriteRenderer / MoveTransform / … / DelayedCall / Kill */ }
+
+// 可选契约：角色 / 特效预制体上的组件实现它就能跟随倍率。
+public interface IVnPlaybackRateReceiver { void OnVnPlaybackRateChanged(float rate); }
+```
+
+`VnStoryManager` 侧：
+
+```csharp
+public void SetPlaybackRate(float playbackRate, float typewriterRate);   // 唯一写入者
+public void ApplyPlaybackRateToActors(float rate);
+public void RefreshTypewriterSpeed();
+public void StopAllTypewriters();
+public bool IsAnyTypewriterPlaying();
+public bool IsLineVoicePlaying();
+public bool IsLoadingAssets { get; }   // 资源加载中，此时不应推进对话
+public Canvas UiCanvas { get; }
+```
+
+### 已读记录与存档
+
+```csharp
+public sealed class VnReadHistory
+{
+    public static void EnsureSimStatusEnabled();    // 检测并补开，顺带关掉 DS 自己的 SimStatus 存档
+    public static string BuildStamp();              // 剧本结构指纹
+    public bool IsUnread(DialogueEntry entry);      // id == 0 的 START 结构节点恒为 false
+    public void HydrateConversation(int conversationId);
+    public void HydrateAll();
+    public string Encode();
+    public bool Load(string encoded, out string error);
+    public void ClearAll();
+}
+
+// 纯函数、无 Unity 依赖，可直接单测
+public static class VnReadHistoryCodec
+{
+    public const ushort Version = 1;
+    public const int MaxCapacity = 100000;
+    public static int ByteLengthFor(int capacity);
+    public static byte GetStatus(byte[] bits, int index);
+    public static void SetStatus(byte[] bits, int index, byte status);
+    public static string Encode(IList<FVnReadRecord> records);
+    public static bool TryDecode(string base64, out List<FVnReadRecord> records, out string error);
+}
+
+// VnStoryManager 实现 Ale.Toolkit.Runtime.ISaveable
+public VnStorySaveData GetSaveData();               // 深拷贝
+public void LoadSaveData(VnStorySaveData data);     // 覆盖语义，容忍 null 与脏数据，不触发事件
+public void ResetAll();
+```
+
+### `VnPlaybackButton` / `VnUiHider`
+
+```csharp
+public enum EVnPlaybackButtonKind { AutoPlay, SpeedTier, FastForward, StopOnUnread, HideUi }
+
+// 挂在按钮物体上，按 kind 自动接控制器并切换开 / 关两张图。
+// 走 EventSystem 的指针事件，与输入后端无关；快进是长按，其余是点击。
+public class VnPlaybackButton : MonoBehaviour { public void Refresh(); }
+
+public class VnUiHider : MonoBehaviour
+{
+    public bool IsHidden { get; }
+    public void Hide();      // 没有 EventSystem 时拒绝执行并报错（避免软锁）
+    public void Show();
+    public void Toggle();
+    public void RegisterCanvas(Canvas canvas);     // 宿主自己的 HUD 也一起藏
+    public bool UnregisterCanvas(Canvas canvas);
+}
+```
 
 ### `VnConditionSources`
 

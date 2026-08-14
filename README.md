@@ -19,7 +19,8 @@
 Ale VN Framework 是一款面向 `Unity` 的**视觉小说（Visual Novel / Galgame）剧情演出插件**，
 建立在 [Pixel Crushers Dialogue System](https://assetstore.unity.com/packages/tools/behavior-ai/dialogue-system-for-unity-11672) 之上。
 Dialogue System 负责**对话数据、分支逻辑与 Lua 环境**，本插件补齐它没有覆盖的**演出层**——
-背景 / 角色 / 特效 / 头像的切换与补间、消息提示、富文本符号、多语言条目、自动播放与跳过。
+背景 / 角色 / 特效 / 头像的切换与补间、消息提示、富文本符号、多语言条目、
+以及玩家侧的播放控制（自动播放 / 倍速 / 快进 / 隐藏 UI）。
 
 演出**不写代码**：在 Dialogue System 对话节点的**字段条目（Fields）**里填参数即可驱动，
 策划在 Dialogue 编辑器窗口内就能完成整段剧情的配置。
@@ -79,7 +80,9 @@ Dialogue System 把「说什么、跳到哪」解决得很好，但「这句话�
 | 分支选项已读态 | `VnResponseButton` 按「是否已读」切换文本颜色、按钮颜色、提示对象显示与图片颜色，配合内置示例可实现「阅读所有选项」。 |
 | 富文本与打字机 | 支持富文本图标符号与打字机符号，逐字显示过程中可插入停顿、表情图标等。 |
 | 多语言条目 | 开启 `ATK_LOCALIZATION` 后，Unity Localization 选中的语言代码同步给 Dialogue System，由它按语言取对白与角色名；批量翻译用 DS 自带的 CSV 导出 / 导入。 |
-| 自动播放与跳过 | `VnStoryPlayer` 可在 Inspector 配置对话名与自动播放时机（`AutoPlayTiming`），也可由 `Button.OnClick` 或脚本触发。 |
+| 剧情启停 | `VnStoryPlayer` 可在 Inspector 配置对话名与**启动时机**（`AutoPlayTiming`：`Manual` / `OnStart` / `OnEnable`），也可由 `Button.OnClick` 或脚本触发。**这管的是「何时开始一段对话」，与下一行的自动播放不是一回事。** |
+| 播放控制 | 右下角一排按钮：**自动播放**（一句演完自动进下一句，等打字机 + 语音都结束）、**播放速度** 1x/2x/3x、**快进**（长按倍速，默认 5x，覆盖打字机 / 补间 / 动画 / 粒子 / 语音）、**新对话停止**（快进遇未读行自动中止）、**隐藏 UI**。见[播放控制](Packages/com.ale.vnframework/README.md#播放控制)。 |
+| 已读记录与存档 | 已读判定复用 Dialogue System 的 `SimStatus`，持久化用自研位图编码（每节点 2 bit，1 万行约 2.4–4.4 KB，DS 自带格式同规模 60–80 KB）。经 `GetSaveData` / `LoadSaveData` / `ResetAll` 交给宿主存档系统，本包不落盘。 |
 | 资源加载可选 Addressables | 经 `ToolkitAssets` 统一入口：开启 `ATK_ADDRESSABLE` 走 Addressables 异步加载与句柄回收，否则回落 `Resources`。 |
 | 玩法系统扩展点 | `RegisterGameplaySystem(fieldTitle, callback)` 让任意自定义系统按字段标题接管演出流程；`RegisterVariableGetter` 同步宿主变量到 Lua。 |
 
@@ -87,7 +90,8 @@ Dialogue System 把「说什么、跳到哪」解决得很好，但「这句话�
 | 组件 | 职责 |
 | --- | --- |
 | **`VnStoryManager`** | 演出核心单例。解析对话节点字段条目，驱动背景 / 角色 / 特效 / 头像 / 消息，管理预制体加载与卸载、全局变量与扩展点。 |
-| **`VnStoryPlayer`** | 播放控制。按对话名启停剧情，可配自动播放时机，或由 UI / 脚本触发。 |
+| **`VnStoryPlayer`** | 剧情启停。按对话名启停剧情，可配启动时机，或由 UI / 脚本触发。 |
+| **`VnPlaybackController`** | 播放控制。自动播放、播放速度档位、快进、新对话停止；与 `VnStoryManager` 同物体。 |
 | **`VnActorAnimator`** | 角色动画对接层。把演出层的播放 / 状态 / 皮肤请求转给 `AnimatorBase`，全部经就绪门控，不依赖帧序。 |
 | **`VnResponseButton`** | 分支选项按钮。派生自 Dialogue System 的 `StandardUIResponseButton`，附加已读 / 未读态表现。 |
 | **`VnStoryAudio`** | 音频接缝。按通道播放 BGM、按 Key 播放环境音 / 音效 / 语音；默认为空实现，见[可选宏开关](#-可选宏开关)。 |
@@ -141,7 +145,7 @@ https://github.com/AleFeng/unity-visual-novel-framework-dialogue-system.git?path
 这样装的是 `main` 的最新提交。**要固定版本，把 `#<tag>` 加在整条 URL 的最末尾**（必须在 `?path=` 之后）：
 
 ```
-https://github.com/AleFeng/unity-visual-novel-framework-dialogue-system.git?path=/Packages/com.ale.vnframework#1.4.0
+https://github.com/AleFeng/unity-visual-novel-framework-dialogue-system.git?path=/Packages/com.ale.vnframework#1.5.0
 ```
 
 可用的 tag 见 [Releases](https://github.com/AleFeng/unity-visual-novel-framework-dialogue-system/releases)。
@@ -300,6 +304,9 @@ UI 样式定制、运行时 API——请见插件内文档：
 节点的条件下拉里），见
 **[条件系统](Packages/com.ale.vnframework/README.md#条件系统)** 章节。
 
+要接玩家侧的**自动播放 / 倍速 / 快进 / 隐藏 UI** 那排按钮，以及配套的已读记录与存档接口，见
+**[播放控制](Packages/com.ale.vnframework/README.md#播放控制)** 章节。
+
 - [VnStoryManager 使用文档](Packages/com.ale.vnframework/Docs~/VnStoryManager/VnStoryManager.md) —
   资源配置 / 资源导入 / 剧情演出配置 / UI 样式 / 功能示例的逐项图文说明（含演示视频）
 - [为 Dialogue System 补 Assembly Definitions](Packages/com.ale.vnframework/Docs~/Setup/PixelCrushers/README.md) —
@@ -313,10 +320,13 @@ Packages/com.ale.vnframework/        ← 包根
 ├── Runtime/
 │   ├── Ale.VnFramework.asmdef   运行时程序集
 │   ├── VnStoryManager.cs        演出核心：背景/角色/特效/头像/消息/变量/扩展点
-│   ├── VnStoryPlayer.cs         播放控制：按对话名启停、自动播放时机
+│   ├── VnStoryPlayer.cs         剧情启停：按对话名启停、启动时机
 │   ├── VnActorAnimator.cs       角色动画对接层（→ AnimatorBase，后端无关）
 │   ├── VnResponseButton.cs      分支选项按钮（已读 / 未读态）
 │   ├── Audio/                   可替换的音频后端（IVnAudioBackend + 空实现 + Fs 实现）
+│   │                            可选能力 IVnAudioPlaybackInfo：查询是否在播 + 设置倍速
+│   ├── Playback/                播放控制：自动播放 / 倍速 / 快进 / 新对话停止 / 隐藏UI
+│   │                            含已读记录的位图编解码与存档 DTO
 │   └── Condition/               Toolkit 条件系统接入：判定器 → DS 的 Lua 条件函数
 │                                （独立程序集，按 toolkit 版本自动门控）
 ├── Editor/
