@@ -78,7 +78,7 @@ Dialogue System 把「说什么、跳到哪」解决得很好，但「这句话�
 | 无动画组件降级 | 纯图片、纯粒子（自动播放）预制体不挂 `VnActorAnimator` 也能正常实例化与销毁；粒子按最大生命期延迟回收，不残留实例、不泄漏 Addressable 句柄。 |
 | 分支选项已读态 | `VnResponseButton` 按「是否已读」切换文本颜色、按钮颜色、提示对象显示与图片颜色，配合内置示例可实现「阅读所有选项」。 |
 | 富文本与打字机 | 支持富文本图标符号与打字机符号，逐字显示过程中可插入停顿、表情图标等。 |
-| 多语言条目 | 开启 `HAS_LOCALIZATION` 后剧情文本接 Unity Localization。 |
+| 多语言条目 | 开启 `ATK_LOCALIZATION` 后，Unity Localization 选中的语言代码同步给 Dialogue System，由它按语言取对白与角色名；批量翻译用 DS 自带的 CSV 导出 / 导入。 |
 | 自动播放与跳过 | `VnStoryPlayer` 可在 Inspector 配置对话名与自动播放时机（`AutoPlayTiming`），也可由 `Button.OnClick` 或脚本触发。 |
 | 资源加载可选 Addressables | 经 `ToolkitAssets` 统一入口：开启 `ATK_ADDRESSABLE` 走 Addressables 异步加载与句柄回收，否则回落 `Resources`。 |
 | 玩法系统扩展点 | `RegisterGameplaySystem(fieldTitle, callback)` 让任意自定义系统按字段标题接管演出流程；`RegisterVariableGetter` 同步宿主变量到 Lua。 |
@@ -253,13 +253,13 @@ Tools > Ale Toolkit > VN Framework > Welcome
 
 | 宏 | 作用 | 由谁定义 |
 | --- | --- | --- |
-| `HAS_TMPRO` | 启用 TextMeshPro 文本路径（`VnResponseButton` / `VnStoryManager`） | **Fs GameFramework** 的 DefineChecker |
-| `HAS_LOCALIZATION` | 启用 Unity Localization 的多语言条目 | **Fs GameFramework** 的 DefineChecker |
-| `ATK_ADDRESSABLE` | 资源经 `ToolkitAssets` 走 Addressables，否则回落 `Resources` | Ale Toolkit 的 DefineChecker |
+| `ATK_LOCALIZATION` | 把 Unity Localization 选中的语言代码同步给 Dialogue System | **Ale Toolkit 欢迎窗口**的「插件支持」 |
+| `ATK_ADDRESSABLE` | 资源经 `ToolkitAssets` 走 Addressables，否则回落 `Resources` | 同上 |
 | `VNS_FS_GAMEFRAMEWORK` | 把 `VnStoryAudio` 接到 Fs 的 `AudioManager` | **本包欢迎窗口**的「插件支持」 |
 
-> ⚠️ `HAS_TMPRO` 与 `HAS_LOCALIZATION` 目前由 `com.fs.gameframework` 维护，**不是**本插件或 Ale Toolkit
-> 维护的。没装 Fs 的工程里这两个宏不会被自动定义，对应功能会静默关闭——需要时在 Project Settings 手工添加。
+> 自 1.1.0 起，本插件**不再使用 `HAS_TMPRO` / `HAS_LOCALIZATION`**。前者由 `com.fs.gameframework`
+> 维护，没装 Fs 的工程里不会被定义、功能会静默关闭；现已改用 Ale Toolkit 的 `ATK_*` 一族
+> （TMP 那一路更是连宏都不需要了——文本字段放宽为 `Graphic`，TMP 与 UGUI Text 通吃）。
 >
 > ⚠️ `VNS_FS_GAMEFRAMEWORK` 默认关闭，**此时剧情全程无声**。详见[详细文档](Packages/com.ale.vnframework/README.md#音频接缝)。
 >
@@ -305,11 +305,13 @@ Packages/com.ale.vnframework/        ← 包根
 ```
 
 ## 📋 待办事项
-- 音频后端未接：`VnStoryAudio` 目前是空实现，需要一套不依赖 `com.fs.gameframework` 的音频管理器。
-- `HAS_TMPRO` / `HAS_LOCALIZATION` 改用 Ale Toolkit 的 `ATK_TMP` / `ATK_LOCALIZATION`，去掉对 Fs 的隐性依赖。
+- 默认不接任何音频后端：`VnStoryAudio.Backend` 默认是空实现。已可由第三方实现 `IVnAudioBackend` 接入，
+  但仍缺一套不依赖 `com.fs.gameframework` 的现成音频管理器。
 - 一键 Demo 向导（欢迎窗口已就位，向导尚未做）。
-- `VnActorAnimator` 等公共接口的 API 文档。
 - 样例资源的地址前缀改为随样例自动适配，免去手工订正。
+- `com.ale.toolkit` 的 `AddressableManager` 会把**加载失败的条目**留在静态表里
+  （`Done=true, Result=null`），导致同一地址此后不再真正重试加载。本插件侧已于 1.1.0 修掉同类问题，
+  但端到端重试仍受该层影响。
 
 ## 📄 许可
 本项目基于 [MIT License](LICENSE) 开源，可自由用于商业与非商业项目。

@@ -63,7 +63,13 @@ Dialogue System 负责对话数据、分支逻辑与 Lua 环境；本插件把�
 - **补间**：位置 / 旋转 / 缩放的第 4 个参数是速度倍率；背景切换可经 Dialogue System 的
   `StandardSceneTransitionManager` 做淡入淡出。
 - **富文本与打字机**：支持富文本图标符号与打字机符号，可在逐字显示中插入停顿与表情图标。
-- **多语言**：开启 `HAS_LOCALIZATION` 后，`[字段标题]+[语言代码]` 形式的条目接 Unity Localization。
+- **多语言**：开启 `ATK_LOCALIZATION` 后，本框架把 Unity Localization 当前选中的**语言代码**
+  同步给 Dialogue System（`Localization.language`）。真正的取值由 Dialogue System 自己完成，
+  且只作用于**它自己的**字段——对白按**裸语言代码**字段查找（`ja` / `zh-Hans` …），
+  其余字段按「标题 + 空格 + 语言代码」查找（`Display Name ja`，也支持下划线）。
+  本框架的演出字段（`Background`、`Actor1Prefab` 等）不参与多语言。
+  批量翻译走 Dialogue System 自带的 CSV 导出 / 导入，见
+  [使用文档 · 多语言的导出与导入](Docs~/VnStoryManager/VnStoryManager.md#多语言的导出与导入)。
 
 ### 播放控制（`VnStoryPlayer`）
 
