@@ -42,7 +42,7 @@ namespace Ale.VnFramework
     /// <summary>
     /// Vn故事系统 管理器组件。
     /// </summary>
-    public class VnStoryManager : ToolkitMonoSingleton<VnStoryManager>
+    public class VnStoryManager : ToolkitMonoSingleton<VnStoryManager>, ISaveable
     {
         protected override void Awake()
         {
@@ -120,6 +120,74 @@ namespace Ale.VnFramework
         /// 已读记录。运行时判定走 Dialogue System 的 SimStatus，本对象负责紧凑持久化与读档回填。
         /// </summary>
         public VnReadHistory ReadHistory => _readHistory ?? (_readHistory = new VnReadHistory());
+        #endregion
+
+        #region 存档接口
+        /// <summary>播放控制组件。挂在本物体上，没挂时为 null（配置部分的存档会被跳过）。</summary>
+        public VnPlaybackController Playback => _playback ? _playback : (_playback = GetComponent<VnPlaybackController>());
+        private VnPlaybackController _playback;
+
+        /// <summary>
+        /// 取全部需要持久化的状态，返回**深拷贝**。宿主持有并序列化它的期间，
+        /// 继续玩不会改变已取出的这份快照。
+        ///
+        /// <para><b>本包只提供 Get / Set，不实现 Load / Save</b>——落盘归宿主的存档系统。</para>
+        /// </summary>
+        public VnStorySaveData GetSaveData() => new VnStorySaveData
+        {
+            Version = 1,
+            Settings = Playback ? Playback.GetSettings() : null,
+            ReadHistory = ReadHistory.Encode(),
+            ReadHistoryStamp = VnReadHistory.BuildStamp(),
+        };
+
+        /// <summary>
+        /// 从存档恢复。**覆盖**语义而非合并：先丢弃当前内存状态，再按存档重建；
+        /// 存档里没有、内存里有的条目不会残留。
+        ///
+        /// <para>接受 <c>null</c> 与字段缺失的脏数据（跳过而非抛异常），且<b>不触发任何变更事件</b>——
+        /// 这是 <see cref="ISaveable"/> 一族的契约。界面刷新由调用方在载入完成后自行触发，
+        /// 按钮条可调 <c>Playback.NotifyStateChanged()</c>。</para>
+        /// </summary>
+        public void LoadSaveData(VnStorySaveData data)
+        {
+            if (data == null)
+            {
+                ResetAll();
+                return;
+            }
+
+            if (Playback) Playback.ApplySettings(data.Settings);
+
+            // 剧本被整库重导入过的话，会话与节点 ID 已重编号，位图会静默错位——
+            // 玩家会看到没读过的剧情被当作已读跳过。宁可丢掉记录也不能错位。
+            var currentStamp = VnReadHistory.BuildStamp();
+            if (!string.IsNullOrEmpty(data.ReadHistoryStamp) && data.ReadHistoryStamp != currentStamp)
+            {
+                Debug.LogWarning($"剧情演出 >> 存档里的剧本指纹（{data.ReadHistoryStamp}）与当前剧本（{currentStamp}）不一致，" +
+                                 "已读记录已被丢弃。这通常意味着剧情库被整库重新导入过（Chat Mapper / articy / CSV），" +
+                                 "会话与节点 ID 已重编号，沿用旧记录会导致已读状态错位。");
+                ReadHistory.ClearAll();
+                return;
+            }
+
+            string error;
+            if (!ReadHistory.Load(data.ReadHistory, out error))
+            {
+                Debug.LogWarning($"剧情演出 >> 已读记录解析失败（{error}），已按「什么都没读过」处理。");
+            }
+        }
+
+        /// <summary>
+        /// 清空本系统的全部运行时状态，回到初始态（开新游戏 / 读档前清场）。
+        /// 同样<b>不触发变更事件</b>。
+        /// </summary>
+        public void ResetAll()
+        {
+            ReadHistory.ClearAll();
+            if (Playback) Playback.ResetToDefaults();
+            SetPlaybackRate(1f, 1f);
+        }
         #endregion
 
         #region 播放倍率

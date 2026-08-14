@@ -252,6 +252,62 @@ namespace Ale.VnFramework
 
         #endregion
 
+        #region 存档
+
+        /// <summary>取当前配置的**深拷贝**。调用方持有并序列化它的期间，玩家继续改设置不会影响这份快照。</summary>
+        public VnPlaybackSettingsData GetSettings() => new VnPlaybackSettingsData
+        {
+            AutoPlay = _autoPlay,
+            AutoPlayDelay = autoPlayDelay,
+            SpeedTier = (int)_speedTier,
+            FastForwardRate = fastForwardRate,
+            StopOnUnread = _stopOnUnread,
+        };
+
+        /// <summary>
+        /// 按存档覆盖配置。<b>不触发 <see cref="StateChanged"/></b>——这是
+        /// <c>ISaveable</c> 的契约：批量替换状态后由调用方自行刷新界面。
+        /// 刷新用 <see cref="NotifyStateChanged"/>。
+        ///
+        /// <para>接受 <c>null</c> 与脏数据：档位越界会被夹回 1~3，时长与倍率会被夹到合法范围，
+        /// 而不是抛异常——一份坏存档不该让整个演出系统起不来。</para>
+        /// </summary>
+        public void ApplySettings(VnPlaybackSettingsData data)
+        {
+            if (data == null) return;
+
+            _autoPlay = data.AutoPlay;
+            autoPlayDelay = Mathf.Max(0f, data.AutoPlayDelay);
+            fastForwardRate = Mathf.Max(1f, data.FastForwardRate);
+            _stopOnUnread = data.StopOnUnread;
+
+            var tier = Mathf.Clamp(data.SpeedTier, 1, 3);
+            _speedTier = (EVnPlaybackSpeedTier)tier;
+
+            // 快进态不进存档：它是「按住」这个瞬时动作的产物，读档时必须回到未按住。
+            _fastForwardState = EVnFastForwardState.Off;
+
+            ApplyRate();
+            RefreshAdvanceWatcher();
+        }
+
+        /// <summary>恢复到 Inspector 上配置的默认值（开新游戏）。同样不触发变更事件。</summary>
+        public void ResetToDefaults()
+        {
+            _autoPlay = autoPlayDefaultOn;
+            _speedTier = defaultSpeedTier;
+            _stopOnUnread = stopOnUnreadDefaultOn;
+            _fastForwardState = EVnFastForwardState.Off;
+
+            ApplyRate();
+            RefreshAdvanceWatcher();
+        }
+
+        /// <summary>主动广播一次状态变更，让按钮刷新图标。读档 / 重置之后由调用方调用。</summary>
+        public void NotifyStateChanged() => RaiseStateChanged();
+
+        #endregion
+
         #region 倍率合成
 
         private void SetFastForwardState(EVnFastForwardState state)
