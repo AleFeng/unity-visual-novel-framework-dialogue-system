@@ -364,6 +364,9 @@ namespace Ale.VnFramework
         private readonly Dictionary<string, UnityEngine.Object> _dicLoadedAssets = new Dictionary<string, UnityEngine.Object>();
         // 加载中的资源 请求卸载的计数器（加载完成后应立即卸载的次数）。
         private readonly Dictionary<string, int> _dicPendingUnloadAfterLoad = new Dictionary<string, int>();
+        // 同一地址在途加载期间，后续请求的回调队列（见 LoadAsset 里「同址并发」那段的说明）。
+        private readonly Dictionary<string, List<Action<UnityEngine.Object>>> _dicPendingCallbacks =
+            new Dictionary<string, List<Action<UnityEngine.Object>>>();
         // 由本类在运行时 Sprite.Create 出来的 Sprite（地址解析到的是 Texture2D 而非 Sprite 时才有）。
         // 这种 Sprite 不属于 Addressables，UnloadAsset 释放的只是它背后的纹理句柄，它自己必须显式 Destroy，
         // 否则每换一次头像 / 背景就漏一个。以地址为键，生命周期便与纹理严格对齐——
@@ -438,6 +441,8 @@ namespace Ale.VnFramework
                 _dicLoadedAssetCounter.Remove(assetAddress);
             }
 
+            // 该地址是否已有在途加载。必须在下面那行自增之前判断。
+            bool alreadyLoading = _dicLoadingAssetCounter.ContainsKey(assetAddress);
             // 增加 资源加载计数器
             _dicLoadingAssetCounter[assetAddress] = _dicLoadingAssetCounter.GetValueOrDefault(assetAddress, 0) + 1;
             // 加载中，禁止跳过对话。
@@ -445,20 +450,44 @@ namespace Ale.VnFramework
             // 会在同一调用栈内把它改回 true——本守卫因而实际不生效，且每次请求都会把继续按钮
             // 关一次再开一次。接上真正的异步后端后语义自然恢复，故此处不改逻辑。
             SetContinueButtonActive(false);
+
+            // ── 同址并发：只排队，不再向后端要第二次 ──────────────────────────────
+            // 同一行里两个槽位配了同一个预制体时（3 个角色槽 + 3 个特效槽，很现实），
+            // 两次请求都会在回调之前发生、都 miss _dicLoadedAssets。
+            //
+            // 后端（AddressableManager）自己也按地址去重，**不会**重复取 Addressable 句柄——
+            // 但它的 RefCount 会被加两次，而本类的 UnloadAsset 只在自己的计数归零时释放**一次**，
+            // 于是 RefCount 2 → 1，永远到不了 0：句柄与资源永久滞留。
+            //
+            // 故在这里确立不变式：**同一地址同时只有一次在途加载**。
+            // 排队的请求不发新请求，但仍要各自累加 _dicLoadedAssetCounter（在排空时做），
+            // 这样它们各自的 UnloadAsset 才配得平。
+            if (alreadyLoading)
+            {
+                if (!_dicPendingCallbacks.TryGetValue(assetAddress, out var queue))
+                {
+                    queue = new List<Action<UnityEngine.Object>>();
+                    _dicPendingCallbacks[assetAddress] = queue;
+                }
+                queue.Add(asset => onAssetLoaded?.Invoke(asset as T));
+                return;
+            }
+
             Action<T> callback = (asset) =>
             {
-                // 减少 加载中的资源的计数器
-                var remainingLoading = _dicLoadingAssetCounter.GetValueOrDefault(assetAddress, 1) - 1;
-                if (remainingLoading <= 0)
-                    _dicLoadingAssetCounter.Remove(assetAddress);
-                else
-                    _dicLoadingAssetCounter[assetAddress] = remainingLoading;
+                // 本地址的**全部**并发请求共用这一次回调，故整条计数一次性清掉，不是减一。
+                _dicLoadingAssetCounter.Remove(assetAddress);
                 // 恢复允许跳过对话
                 if (_dicLoadingAssetCounter.Count == 0)
                 {
                     SetContinueButtonActive(true);
                 }
-                
+
+                // 取出排队的请求。主请求 + 队列 = 本地址这一轮的全部请求数，
+                // 后端只被请求过一次，所以它那边的引用计数也只有 1，下面按「一次」结算。
+                _dicPendingCallbacks.TryGetValue(assetAddress, out var queued);
+                _dicPendingCallbacks.Remove(assetAddress);
+
                 // 加载是否成功。泛型形参 T 拿不到 UnityEngine.Object 的 bool 重载，必须先上转型再判空
                 // （与 ToolkitAssets 内部同一写法）。ToolkitAssets 约定：加载失败时回调传入 null。
                 bool succeeded = (UnityEngine.Object)asset;
@@ -475,6 +504,9 @@ namespace Ale.VnFramework
                     // 空放会让加载器的引用计数错位。
                     if (succeeded) ToolkitAssets.ReleaseAddress(assetAddress);
 
+                    // 排队的请求同样按「已取消」处理：回传 null，让它们各自走失败分支。
+                    // 不入缓存也不计数，故它们不会去扣一个不存在的计数。
+                    InvokeQueued(queued, null);
                     return;
                 }
 
@@ -484,19 +516,38 @@ namespace Ale.VnFramework
                 if (!succeeded)
                 {
                     onAssetLoaded?.Invoke(null);
+                    InvokeQueued(queued, null);
                     return;
                 }
 
-                // 增加 已加载资源计数器
-                _dicLoadedAssetCounter[assetAddress] = _dicLoadedAssetCounter.GetValueOrDefault(assetAddress, 0) + 1;
                 // 记录已加载的资源
                 _dicLoadedAssets[assetAddress] = asset;
+                // 增加 已加载资源计数器：主请求 1 次 + 每个排队请求各 1 次。
+                // 它们各自都会调一次 UnloadAsset，计数必须与请求数一致才配得平。
+                _dicLoadedAssetCounter[assetAddress] =
+                    _dicLoadedAssetCounter.GetValueOrDefault(assetAddress, 0) + 1 + (queued?.Count ?? 0);
 
                 // 调用原始回调
                 onAssetLoaded?.Invoke(asset);
+                InvokeQueued(queued, asset);
             };
-            
+
             ToolkitAssets.LoadByAddress(assetAddress, callback);
+        }
+
+        /// <summary>
+        /// 排空同址并发的回调队列。逐个 try/catch：调用方的回调抛异常不应让后面排队的请求收不到结果，
+        /// 更不应让上面刚记好的计数与实际回调数对不上。
+        /// </summary>
+        private static void InvokeQueued(List<Action<UnityEngine.Object>> queued, UnityEngine.Object asset)
+        {
+            if (queued == null) return;
+
+            for (int i = 0; i < queued.Count; i++)
+            {
+                try { queued[i]?.Invoke(asset); }
+                catch (Exception e) { Debug.LogException(e); }
+            }
         }
         
         /// <summary>
