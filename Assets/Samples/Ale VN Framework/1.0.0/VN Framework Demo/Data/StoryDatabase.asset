@@ -2330,7 +2330,7 @@ MonoBehaviour:
         destinationDialogueID: 5
         isConnector: 0
         priority: 2
-      conditionsString: 
+      conditionsString: "Variable[\"\u65F6\u95F4_\u65E5\"] == 0"
       userScript: "Variable[\"\u9009\u9879\u5E8F\u53F7\"] = 1;\n"
       onExecute:
         m_PersistentCalls:
@@ -4004,8 +4004,7 @@ MonoBehaviour:
         isConnector: 0
         priority: 2
       conditionsString: 
-      userScript: "Variable[\"\u9009\u98791\u5DF2\u8BFB\"] = true;\nVariable[\"\u9009\u98791\u5DF2\u8BFB\"]
-        = true"
+      userScript: "Variable[\"\u9009\u98791\u5DF2\u8BFB\"] = true;"
       onExecute:
         m_PersistentCalls:
           m_Calls: []
@@ -4799,7 +4798,7 @@ MonoBehaviour:
         width: 160
         height: 30
     entryGroups: []
-    canvasScrollPosition: {x: 37.36261, y: 0}
+    canvasScrollPosition: {x: 0, y: 671.9656}
     canvasZoom: 0.9100001
   syncInfo:
     syncActors: 0
