@@ -117,21 +117,51 @@ string[] names = VnStoryManager.Instance.GetAllConversationName();
 
 ### 音频接缝
 
-`VnStoryAudio` 是一个 `internal static` 的薄接缝，对演出侧只暴露四件事：
-按**通道**播放 / 停止（承载 BGM），按 **Key** 播放 / 停止（承载环境音、音效、语音）。
+音频后端是**可替换的**：`VnStoryAudio` 是静态门面，真正干活的是
+`VnStoryAudio.Backend`（类型 `IVnAudioBackend`）。默认为 `NullVnAudioBackend`——全空操作，
+不报错、不出声，演出流程照常推进。
 
-> ⚠️ **该文件整体包在 `VNS_FS_GAMEFRAMEWORK` 宏内，宏默认关闭，此时四个接口是空操作、剧情全程无声。**
+#### 接入自己的音频系统
 
-开关在**欢迎窗口**的「插件支持（编译宏）」里（`Tools → Ale Toolkit → VN Framework → Welcome`），
-勾选即接入 Fs GameFramework 的 `AudioManager`：BGM 按通道播放（同通道交叉淡入淡出），
-环境音 / 音效 / 语音按 Key 播放。程序集引用（`Fs.GameFramework.Common.AudioSystem` 与
-`Fs.Utility`）已常驻在 `Runtime/Ale.VnFramework.asmdef` 里，**无需手工添加**——
-Unity 对按名字解析不到的 asmdef 引用是静默跳过的，没装 Fs 的工程不会因此收到任何警告。
+**只需实现四个原语，不需要定义任何编译宏，也不需要改动本包源码：**
 
-> 开启后还需要在 Fs 的音频系统里配置好 `AudioLibrary`，否则会逐条报
+```csharp
+using Ale.VnFramework;
+using UnityEngine;
+
+public sealed class MyAudioBackend : IVnAudioBackend
+{
+    public void PlayWithChannel(EVnAudioCategory category, string channelName, string audioKey, float volume, float pitch) { }
+    public void StopWithChannel(EVnAudioCategory category, string channelName) { }
+    public void Play(EVnAudioCategory category, string audioKey, float volume, float pitch) { }
+    public void Stop(EVnAudioCategory category, string audioKey) { }
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+    private static void Install() => VnStoryAudio.Backend = new MyAudioBackend();
+}
+```
+
+`audioKey` 就是剧本节点上配的那串字符串，**怎么解析成实际资源完全由后端决定**。
+`EVnAudioCategory` 为 `Bgm` / `Ambient` / `Sfx` / `Voice`，可据此路由到不同的 Mixer 组或做独立音量控制。
+
+> **演出语义不用你操心。** 解析 `Key|音量|音调|延迟`、延迟播放、切换对话行时停掉上一行的音效、
+> BGM 值为空即停该通道、跨行去重——全部由 `VnStoryManager` 负责。后端只管「播 / 停」这四件事。
+> 这也是扩展点开在这一层、而不是开在字段级的原因：开在字段级，每个接入者都得把上面这些重写一遍。
+
+#### 内置的 Fs GameFramework 后端
+
+`FsVnAudioBackend` 由 `VNS_FS_GAMEFRAMEWORK` 宏门控（宏关闭时整个文件不参与编译，本包对 Fs 零依赖），
+在**欢迎窗口**的「插件支持（编译宏）」里勾选即可（`Tools → Ale Toolkit → VN Framework → Welcome`），
+启动时经 `[RuntimeInitializeOnLoadMethod]` 自动注册。它同时也是一份**接入范例**。
+
+所需的程序集引用（`Fs.GameFramework.Common.AudioSystem` 与 `Fs.Utility`）已常驻在
+`Runtime/Ale.VnFramework.asmdef` 里，**无需手工添加**——Unity 对按名字解析不到的 asmdef 引用
+是静默跳过的，没装 Fs 的工程不会因此收到任何警告。
+
+> ⚠️ 开启后还需要在 Fs 的音频系统里配置好 `AudioLibrary`，否则会逐条报
 > `AudioEntry with key '...' not found` 且依然没有声音——宏只负责接通调用链，音频资产要自行准备。
-
-要换成别的音频后端，只需改 `VnStoryAudio.cs` 这一个文件：包内没有任何其他地方直接引用音频类型。
+>
+> 显式赋值优先于自动注册：`Install()` 发现 `VnStoryAudio.IsAvailable` 已为 true 时不会覆盖你的后端。
 
 ### 对外扩展点
 
@@ -193,7 +223,12 @@ com.ale.vnframework/
 │   ├── VnStoryPlayer.cs         播放控制：按对话名启停、自动播放时机
 │   ├── VnActorAnimator.cs       角色动画对接层（→ AnimatorBase，就绪门控）
 │   ├── VnResponseButton.cs      分支选项按钮（已读 / 未读态）
-│   └── VnStoryAudio.cs          音频接缝（宏关闭时为空实现）
+│   └── Audio/                   可替换的音频后端
+│       ├── IVnAudioBackend.cs   ← 接入自己的音频系统实现这个
+│       ├── EVnAudioCategory     （同文件）Bgm / Ambient / Sfx / Voice
+│       ├── VnStoryAudio.cs      静态门面，持有当前后端
+│       ├── NullVnAudioBackend.cs 默认空实现
+│       └── FsVnAudioBackend.cs  Fs 后端（VNS_FS_GAMEFRAMEWORK 门控，兼作范例）
 ├── Editor/                      欢迎窗口与编译宏开关
 │   ├── Ale.VnFramework.Editor.asmdef
 │   ├── VnFrameworkWelcomeWindow.cs   前置条件自检 + 插件支持（编译宏）+ 文档入口

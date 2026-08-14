@@ -287,7 +287,7 @@ Packages/com.ale.vnframework/        ← 包根
 │   ├── VnStoryPlayer.cs         播放控制：按对话名启停、自动播放时机
 │   ├── VnActorAnimator.cs       角色动画对接层（→ AnimatorBase，后端无关）
 │   ├── VnResponseButton.cs      分支选项按钮（已读 / 未读态）
-│   └── VnStoryAudio.cs          音频接缝（宏关闭时为空实现）
+│   └── Audio/                   可替换的音频后端（IVnAudioBackend + 空实现 + Fs 实现）
 ├── Editor/
 │   ├── Ale.VnFramework.Editor.asmdef
 │   ├── VnFrameworkWelcomeWindow.cs   欢迎窗口：前置条件自检 + 插件支持 + 文档

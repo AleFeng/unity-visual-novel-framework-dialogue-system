@@ -1547,8 +1547,10 @@ namespace Ale.VnFramework
         
         // 记录 背景音乐-字段标题 到 音频Key 的映射表。用于停止上个对话行播放的背景音乐。
         private readonly Dictionary<string, string> _dicBgmFieldTitleToAudioKey = new Dictionary<string, string>();
-        // 记录 音频-字段标题 到 音频Key 的映射表。进入到新的对话行时，停止所有上个对话行播放的音频。
-        private readonly Dictionary<string, string> _dicSfxFieldTitleToAudioKey = new Dictionary<string, string>();
+        // 记录 音频-字段标题 到 (音频Key, 音频类别) 的映射表。进入到新的对话行时，停止所有上个对话行播放的音频。
+        // 之所以连类别一起记：环境音 / 音效 / 语音共用这张表，而停止时要把正确的类别回传给后端。
+        private readonly Dictionary<string, (string Key, EVnAudioCategory Category)> _dicSfxFieldTitleToAudioKey
+            = new Dictionary<string, (string, EVnAudioCategory)>();
         // 记录 背景音乐 延迟播放的 延时句柄。
         private readonly List<ToolkitTweenHandle> _bgmDelayTweens = new List<ToolkitTweenHandle>();
         // 记录 音效音频 延迟播放的 延时句柄。
@@ -1588,21 +1590,21 @@ namespace Ale.VnFramework
             {
                 var audioFieldTitle = audioAmbientFieldTitle[i];
                 var audioAmbientParam = Field.LookupValue(subtitle.dialogueEntry.fields, audioFieldTitle);
-                PlaySfxByParam(audioFieldTitle, audioAmbientParam);
+                PlaySfxByParam(EVnAudioCategory.Ambient, audioFieldTitle, audioAmbientParam);
             }
             // 音效
             for (int i = 0; i < audioSfxFieldTitle.Length; i++)
             {
                 var audioFieldTitle = audioSfxFieldTitle[i];
                 var audioSfxParam = Field.LookupValue(subtitle.dialogueEntry.fields, audioFieldTitle);
-                PlaySfxByParam(audioFieldTitle, audioSfxParam);
+                PlaySfxByParam(EVnAudioCategory.Sfx, audioFieldTitle, audioSfxParam);
             }
             // 语音
             for (int i = 0; i < audioVoiceFieldTitle.Length; i++)
             {
                 var audioFieldTitle = audioVoiceFieldTitle[i];
                 var audioVoiceParam = Field.LookupValue(subtitle.dialogueEntry.fields, audioFieldTitle);
-                PlaySfxByParam(audioFieldTitle, audioVoiceParam);
+                PlaySfxByParam(EVnAudioCategory.Voice, audioFieldTitle, audioVoiceParam);
             }
         }
 
@@ -1631,7 +1633,7 @@ namespace Ale.VnFramework
                     tweenHolder[0] = ToolkitTween.DelayedCall(delay, () =>
                     {
                         // 延迟时间到，播放背景音乐。循环播放
-                        VnStoryAudio.PlayWithChannel(audioFieldTitle, audioKey, volume, pitch);
+                        VnStoryAudio.PlayWithChannel(EVnAudioCategory.Bgm, audioFieldTitle, audioKey, volume, pitch);
                         // 记录 背景音乐Key
                         _dicBgmFieldTitleToAudioKey[audioFieldTitle] = audioKey;
                         // 从 延迟播放的 句柄列表中 移除
@@ -1643,7 +1645,7 @@ namespace Ale.VnFramework
                 else
                 {
                     // 立即播放背景音乐。循环播放
-                    VnStoryAudio.PlayWithChannel(audioFieldTitle, audioKey, volume, pitch);
+                    VnStoryAudio.PlayWithChannel(EVnAudioCategory.Bgm, audioFieldTitle, audioKey, volume, pitch);
                     // 记录 背景音乐Key
                     _dicBgmFieldTitleToAudioKey[audioFieldTitle] = audioKey;
                 }
@@ -1656,7 +1658,7 @@ namespace Ale.VnFramework
         /// <param name="audioFieldTitle">音频 字段标题</param>
         private void StopBGMByFieldTitle(string audioFieldTitle)
         {
-            VnStoryAudio.StopWithChannel(audioFieldTitle);
+            VnStoryAudio.StopWithChannel(EVnAudioCategory.Bgm, audioFieldTitle);
         }
         
         /// <summary>
@@ -1689,7 +1691,7 @@ namespace Ale.VnFramework
             // 停止所有 记录的 背景音乐Key
             foreach (var kvp in _dicBgmFieldTitleToAudioKey)
             {
-                VnStoryAudio.Stop(kvp.Value);
+                VnStoryAudio.Stop(EVnAudioCategory.Bgm, kvp.Value);
             }
             _dicBgmFieldTitleToAudioKey.Clear();
         }
@@ -1697,9 +1699,10 @@ namespace Ale.VnFramework
         /// <summary>
         /// 播放 音频。
         /// </summary>
+        /// <param name="category">音频类别。环境音 / 音效 / 语音共用本方法，类别用于回传给音频后端。</param>
         /// <param name="audioFieldTitle">音频 字段标题。用于确定槽位。</param>
         /// <param name="audioParam">音频参数 内容。</param>
-        private void PlaySfxByParam(string audioFieldTitle, string audioParam)
+        private void PlaySfxByParam(EVnAudioCategory category, string audioFieldTitle, string audioParam)
         {
             // 解析音频参数，获取音频Key和延迟时间
             if (ParseStringAndThreeFloat
@@ -1718,9 +1721,9 @@ namespace Ale.VnFramework
                     tweenHolder[0] = ToolkitTween.DelayedCall(delay, () =>
                     {
                         // 延迟 播放音频
-                        VnStoryAudio.Play(audioKey, volume, pitch);
-                        // 记录 音频Key
-                        _dicSfxFieldTitleToAudioKey[audioFieldTitle] = audioKey;
+                        VnStoryAudio.Play(category, audioKey, volume, pitch);
+                        // 记录 音频Key 与类别
+                        _dicSfxFieldTitleToAudioKey[audioFieldTitle] = (audioKey, category);
                         // 从 延迟播放的 句柄列表中 移除
                         _sfxDelayTweens.Remove(tweenHolder[0]);
                     }, unscaled: false);
@@ -1729,11 +1732,10 @@ namespace Ale.VnFramework
                 }
                 else
                 {
-                    // 立即播放音频
                     // 立即 播放音频
-                    VnStoryAudio.Play(audioKey, volume, pitch);
-                    // 记录 音频Key
-                    _dicSfxFieldTitleToAudioKey[audioFieldTitle] = audioKey;
+                    VnStoryAudio.Play(category, audioKey, volume, pitch);
+                    // 记录 音频Key 与类别
+                    _dicSfxFieldTitleToAudioKey[audioFieldTitle] = (audioKey, category);
                 }
             }
         }
@@ -1753,7 +1755,7 @@ namespace Ale.VnFramework
             // 停止所有 记录的 音频Key
             foreach (var kvp in _dicSfxFieldTitleToAudioKey)
             {
-                VnStoryAudio.Stop(kvp.Value);
+                VnStoryAudio.Stop(kvp.Value.Category, kvp.Value.Key);
             }
             _dicSfxFieldTitleToAudioKey.Clear();
         }

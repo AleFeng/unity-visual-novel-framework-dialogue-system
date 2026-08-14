@@ -40,6 +40,16 @@ Dialogue System 默认没有 asmdef、其代码正落在 `Assembly-CSharp` 里�
   后两条是为 `VNS_FS_GAMEFRAMEWORK` 常驻的——`Fs.Utility` 容易漏，因为
   `AudioManager` 的基类 `MonoBehaviourSingleton<T>` 在那里，而 asmdef 引用不传递。
   Unity 对按名字解析不到的 asmdef 引用静默跳过，故没装 Fs 的工程不会收到警告。
+- **可替换的音频后端** —— `IVnAudioBackend` 接口 + `VnStoryAudio` 静态门面 +
+  `NullVnAudioBackend` 默认空实现。**接入自己的音频系统只需实现四个原语并赋值给
+  `VnStoryAudio.Backend`，不需要定义任何编译宏、也不需要改动本包源码。**
+  四个原语带 `EVnAudioCategory`（`Bgm` / `Ambient` / `Sfx` / `Voice`）参数，便于按类别路由到
+  不同 Mixer 组。演出语义（解析 `Key|音量|音调|延迟`、延迟播放、切行清理、空值即停、跨行去重）
+  仍由 `VnStoryManager` 负责，后端不必重复实现。
+  与 `com.ale.toolkit` 的 `ToolkitAssets` / `IAssetLoader` 是同一套模式。
+  原先写死的 Fs 支持改为 `FsVnAudioBackend`，仍由 `VNS_FS_GAMEFRAMEWORK` 门控，
+  启动时经 `[RuntimeInitializeOnLoadMethod]` 自动注册，并兼作接入范例；
+  显式赋值优先于自动注册。
 - **编辑器程序集 `Ale.VnFramework.Editor` 与欢迎窗口**（`Tools > Ale Toolkit > VN Framework > Welcome`）：
   - **前置条件自检** —— 按运行时程序集 `DialogueSystem` 的源文件列表判定
     `Templates/Scripts/Editor/` 下的纯编辑器脚本是否被卷了进去。这条**编辑器编译不报错、只在出包时失败**，
@@ -80,9 +90,9 @@ Dialogue System 默认没有 asmdef、其代码正落在 `Assembly-CSharp` 里�
   即使 `Ale.VnFramework.asmdef` 已经引用了 `Unity.TextMeshPro` / `Unity.Localization`。
   临时办法是在 Project Settings 手工添加；后续版本考虑改用 Ale Toolkit 的 `ATK_TMP` / `ATK_LOCALIZATION`
   （二者在本仓库中同时定义，故本仓库无感）。
-- **音频接缝未接后端**：`VnStoryAudio` 整体包在 `VNS_FS_GAMEFRAMEWORK` 宏内，该宏默认关闭，
-  此时四个播放 / 停止接口是空操作，剧情全程无声。开启该宏需要 `com.fs.gameframework`，
-  开启需要 `com.fs.gameframework`，且须在 Fs 的音频系统中配置好 `AudioLibrary`。
+- **默认不接任何音频后端**：`VnStoryAudio.Backend` 默认为 `NullVnAudioBackend`，
+  四个播放 / 停止接口是空操作，剧情全程无声。接入自己的音频系统见 README「音频接缝」；
+  内置的 Fs 后端还需在 Fs 的音频系统中配置好 `AudioLibrary` 才会真正出声。
 - **启用 `ATK_ADDRESSABLE` 时，导入后的样例文件夹需自行加入 Addressables 分组**。
   地址前缀本身已对齐样例落地路径、无需订正，但本包无法替使用者写入其工程的 Addressables 配置。
 - **暂无一键 Demo 向导**（欢迎窗口已就位）。
