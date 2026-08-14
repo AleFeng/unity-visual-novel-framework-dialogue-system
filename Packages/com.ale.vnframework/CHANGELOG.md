@@ -9,6 +9,85 @@
 > `PixelCrushers.DialogueSystem.VnStoryFramework` → `Ale.VnFramework`。脚本 `.meta` 的 GUID 全部保留，
 > 既有场景与预制体的组件引用不受影响。**升级前请先读下方「⚠ 前置条件」。**
 
+## [1.4.0] - 2026-08-14
+
+把 **Ale Toolkit 的条件系统**接进对话节点的 Conditions：任何系统只要实现了判定器，
+就会自动出现在节点的条件下拉里，可与既有的手写 Lua 条件自由组合。
+
+**不改 Dialogue System 一行代码**（它在本工程里是 git-ignore 的第三方付费资产，改了既提交不进去、
+重装即失，别人装了本包也没有），全部经它自带的两个扩展点接入。
+**无破坏性变更**：既有的 `Variable["…"]` 条件、剧本配置格式、公开 API 均未改动。
+
+### 新增
+
+- **条件系统接入。** 两个新程序集 `Ale.VnFramework.Condition`（运行时）与
+  `Ale.VnFramework.Condition.Editor`（编辑器），由 `versionDefines` 从 `com.ale.toolkit` ≥ 1.4.0
+  自动推出 `VNS_HAS_CONDITION` 门控——**不给使用者增加一个要记得去勾的开关**，
+  toolkit 若降级则功能连同程序集静默消失，工程不会编译失败。
+  两个核心程序集 `Ale.VnFramework` / `Ale.VnFramework.Editor` **一行未动**。
+- **`VnConditionSources`** —— 宿主接线数值 / 标记 / 领域服务的公开入口。
+- **登记资产的生成与自动同步** —— 菜单
+  `Tools ▸ Ale Toolkit ▸ VN Framework ▸ Generate Condition Lua Functions` 首次创建（弹框征得同意），
+  此后每次脚本重编译比对内容、**有差异才写**。
+  - 为什么必须自动同步：第三方新增判定器后若还要使用者记得来点一次按钮，漏点的表现是
+    「新条件不出现在下拉里」，**没有任何提示**。
+
+### 设计要点
+
+- **数值 / 标记只来自宿主的实时 getter，不读 Dialogue System 的 Variable。**
+  求值当刻才回调宿主，故对话**中途**宿主的值变了会立刻生效。这是与
+  `RegisterVariableGetter` 的关键差异——后者只在每段对话开始时推一次
+  （`SetAllVariablesToDialogueSystem`），对话进行中取到的是旧值。
+- **未接线的 id 返回 `NaN` 而不是 `0`。** `NumberCompareEvaluator` 的五个分支
+  （`>` `≥` `=` `≤` `<`）对 NaN 全部为假，于是「忘了接线」表现为节点进不去。
+  若回落成 `0`，`时间段 ≤ 5` 这类条件会**静默通过**，判定形同虚设——那是最难查的一类 bug。
+  （实测：阈值取 0、五种比较全部判 false；告警按 id 去重，只出一条。）
+- **Lua 函数名保留完整的判定器 Key、且只用 ASCII。** 这些字符串会存进使用者的对话库，
+  命名规则一改，已存的条件就静默失效；而缩短规则依赖「当前有哪些判定器」这个全集，
+  日后新增一个就可能撞名、迫使旧名字改写。难看但永不漂移。
+- **带固定选项的参数传标签而非索引**（`"大于等于"` 而不是 `1`）。Dialogue System 没有通用枚举下拉，
+  传标签至少让生成的 Lua 一眼看得懂，也扛得住日后调整选项顺序。拼错会告警并列出全部合法选项。
+- **命名与跳过规则由 `VnConditionNaming.TryPlan` 单点决定**，运行时桥与编辑器生成器共用。
+  两边若各写一遍并漂移，登记资产会列出桥没注册的函数——向导里能选、运行期报
+  `attempt to call nil`，而编辑期毫无征兆。
+
+### 三条反直觉的事实（备查）
+
+- **条件向导认的是「资产扫描」而不是 Lua 环境。** 它走
+  `AssetDatabase.FindAssets("t:CustomLuaFunctionInfo")`，**从不读 `Lua.Environment`**。
+  所以函数注册得再好，工程里没有那份资产，下拉里一个都不会出现。
+  （另：资产名叫 `DialogueSystemLuaFunctionInfo` 会被当成内置表、跑进 **Misc** 而非 **Custom**。）
+- **`functionName` 只有最后一段是真函数名。** 它支持用 `/` 分子菜单，但生成调用语句时走
+  `Tools.GetAllAfterSlashes` 只取末段。所以菜单叶子段**同时就是** Lua 标识符，
+  分类只能塞在前面几段——这也是菜单里显示 `AleCond_*` 而不是中文显示名的原因。
+- **Lua 传进来的数字是装箱 `float`，不是 `double`。** 见
+  `LuaInterpreterExtensions.LuaValueToObject`。反射绑定只允许加宽，声明 `int` 形参会当场抛异常；
+  且实参个数必须与 C# 签名**严格一致**（无变参、无默认值），差一个就是
+  `TargetParameterCountException`。故形参一律 `object`、并按元数准备 `Eval0`…`Eval8` 一族方法。
+
+### 已知限制
+
+- 条件求值是**同步**的：`Lua.IsTrue` 没有异步扩展点，判定器里不能等 IO。
+- 参数超过 8 个的判定器会被跳过并告警。
+- 手改剧本里的实参个数会抛 `TargetParameterCountException`，增删参数请用向导重新生成。
+- 返回值必须是真 `bool`：`Lua.Result.asBool` 对非 boolean 走 `ToString() == "True"`，
+  `return 1` 会被判成 false。生成的记录一律声明 `returnValue = Bool`，向导据此自动补 `== true`。
+
+### 评估后决定不做
+
+- **在节点 Inspector 里内嵌 Toolkit 原版的两级 AND/OR 条件抽屉。** 接缝确实存在且可用
+  （`DialogueEditorWindow.customDrawDialogueEntryInspector` 是可跨程序集订阅的 `static event`，
+  求值可挂 `DialogueManager.isDialogueEntryValid`），但有两条硬伤：
+  ① 条件不在 Conditions 框里——**框里空着、节点却进不去**，比手写 Lua 更难排查；
+  ② `isDialogueEntryValid` 是**单一全局委托**，宿主若也用就互相覆盖，且它对**每个候选节点**都触发，
+  还要 `Field.LookupValue` 取自定义字段（1.3.0 刚量过这类查找的量级）。
+  若将来确有配置复杂表达式的需求，应在现方案**之上追加**而不是替换。
+- **把 Script（`userScript`）侧也接上 Toolkit 的效果系统。** 结构完全对称
+  （`CustomLuaFunctionInfo.scriptFunctions` + `LuaScriptWizard`），但本次诉求只涉及 Conditions。
+- **自定义 Field 绘制器。** `CustomFieldTypeService.CreateClassFromString` 硬拼
+  `PixelCrushers.DialogueSystem` 命名空间，且只在 `DialogueSystemEditor` / `Assembly-CSharp-Editor`
+  等三个程序集里找类型，放进本包 asmdef 会**静默降级成纯文本框**。
+
 ## [1.3.0] - 2026-08-14
 
 清掉 1.2.0 留下的四条「本次不做」。**逐条调查后发现其中三条的前提写错了**，
