@@ -51,6 +51,47 @@ namespace Ale.VnFramework.Conditions
         }
 
         /// <summary>
+        /// 「这个判定器要不要接、接成什么名字、几个参数」的**唯一**决策点。
+        /// 运行时桥（<see cref="VnConditionBridge"/>）与编辑器的登记资产生成器共用本方法。
+        ///
+        /// <para>⚠️ 两边共用是必须的：一旦规则漂移，登记资产就会列出桥没注册的函数，
+        /// 使用者在向导里选了它、运行期却报「attempt to call nil」，而且编辑期毫无征兆。</para>
+        ///
+        /// <para>不含撞名检查 —— 那需要跨判定器的全局状态，由调用方各自维护。</para>
+        /// </summary>
+        /// <returns>可接入返回 <c>true</c>；否则 <c>false</c> 且 <paramref name="skipReason"/> 给出人话原因。</returns>
+        public static bool TryPlan(Ale.Condition.IConditionEvaluator evaluator,
+            out string luaFunctionName, out int parameterCount, out string skipReason)
+        {
+            luaFunctionName = null;
+            parameterCount = 0;
+            skipReason = null;
+
+            if (evaluator == null || string.IsNullOrEmpty(evaluator.Key))
+            {
+                skipReason = "判定器或其 Key 为空";
+                return false;
+            }
+
+            luaFunctionName = ToLuaFunctionName(evaluator.Key);
+            if (string.IsNullOrEmpty(luaFunctionName))
+            {
+                skipReason = "无法由 Key 生成合法的 Lua 函数名";
+                return false;
+            }
+
+            var schema = evaluator.ParamSchema;
+            parameterCount = schema == null ? 0 : schema.Count;
+            if (parameterCount > MaxParameterCount)
+            {
+                skipReason = $"有 {parameterCount} 个参数，超过上限 {MaxParameterCount}";
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
         /// 判定器分类 + Lua 函数名 → 条件向导的菜单路径。
         ///
         /// <para>⚠️ Dialogue System 用 <c>/</c> 分子菜单，但生成调用语句时只取**最后一段**当函数名

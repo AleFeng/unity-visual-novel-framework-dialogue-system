@@ -1,0 +1,30 @@
+{
+    "name": "Ale.VnFramework.Condition.Editor",
+    "rootNamespace": "Ale.VnFramework.Editor.ConditionSupport",
+    "references": [
+        "Ale.VnFramework.Condition",
+        "Ale.Condition.Core",
+        "Ale.Condition.Editor",
+        "PixelCrushers",
+        "DialogueSystem"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "VNS_HAS_CONDITION"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.ale.toolkit",
+            "expression": "1.4.0",
+            "define": "VNS_HAS_CONDITION"
+        }
+    ],
+    "noEngineReferences": false
+}

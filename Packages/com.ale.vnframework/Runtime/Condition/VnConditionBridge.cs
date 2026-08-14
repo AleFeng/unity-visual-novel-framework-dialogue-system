@@ -65,18 +65,16 @@ namespace Ale.VnFramework.Conditions
 
             foreach (var evaluator in registry.All)
             {
-                if (evaluator == null || string.IsNullOrEmpty(evaluator.Key)) continue;
-
-                var luaName = VnConditionNaming.ToLuaFunctionName(evaluator.Key);
-                if (string.IsNullOrEmpty(luaName)) continue;
-
-                var schema = evaluator.ParamSchema;
-                var parameterCount = schema == null ? 0 : schema.Count;
-                if (parameterCount > VnConditionNaming.MaxParameterCount)
+                string luaName;
+                int parameterCount;
+                string skipReason;
+                if (!VnConditionNaming.TryPlan(evaluator, out luaName, out parameterCount, out skipReason))
                 {
-                    Debug.LogWarning($"{VnConditionLog.Prefix} 判定器「{evaluator.Key}」有 {parameterCount} 个参数，" +
-                                     $"超过上限 {VnConditionNaming.MaxParameterCount}，已跳过 —— 它不会出现在" +
-                                     "Dialogue System 的条件下拉里。");
+                    if (evaluator != null && !string.IsNullOrEmpty(evaluator.Key))
+                    {
+                        Debug.LogWarning($"{VnConditionLog.Prefix} 判定器「{evaluator.Key}」{skipReason}，已跳过 —— " +
+                                         "它不会出现在 Dialogue System 的条件下拉里。");
+                    }
                     continue;
                 }
 
