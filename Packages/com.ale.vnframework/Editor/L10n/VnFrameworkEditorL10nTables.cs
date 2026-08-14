@@ -14,9 +14,11 @@ namespace Ale.VnFramework.Editor
         static VnFrameworkEditorL10NTables()
         {
             RegisterWelcome();
+            RegisterSample();
         }
 
         // 各区域译表在对应的分部文件中实现；未实现者编译期消除，可增量补充。
         static partial void RegisterWelcome();
+        static partial void RegisterSample();
     }
 }

@@ -37,6 +37,21 @@ namespace Ale.VnFramework.Editor
         private bool _fsEnabled;
         private bool _fsInstalled;
 
+        /// <summary>
+        /// 「把样例登记进 Addressables」的注入钩子。默认 null，本区块也就不绘制。
+        ///
+        /// <para>本程序集对 Addressables <b>零引用</b>：实现在独立的
+        /// <c>Ale.VnFramework.Addressables.Editor</c> 里，由它的 <c>[InitializeOnLoad]</c> 赋值。
+        /// 该程序集受 <c>ATK_ADDRESSABLE</c> 门控，宏一关就不参与编译，按钮随之自动消失。
+        /// 与 toolkit 的 <c>ToolkitWelcomeWindow.OpenAddressableMigration</c> 是同一套做法。</para>
+        ///
+        /// <para>返回值是给用户看的结果描述；抛异常由调用方兜住。</para>
+        /// </summary>
+        public static Func<string> RegisterDemoAddressables;
+
+        /// <summary>登记按钮上方显示的现状说明。同样由 Addressables 子程序集注入。</summary>
+        public static Func<string> DescribeDemoAddressables;
+
         #region 打开窗口
 
         [MenuItem("Tools/Ale Toolkit/VN Framework/Welcome", priority = 1020)]
@@ -106,6 +121,9 @@ namespace Ale.VnFramework.Editor
 
             DrawMacroSection();
             DrawSeparator();
+
+            // 仅在 Addressables 子程序集参与编译时才有内容（钩子非 null）
+            if (DrawSampleSection()) DrawSeparator();
 
             DrawDocSection();
 
@@ -379,6 +397,69 @@ namespace Ale.VnFramework.Editor
             }
 
             EditorGUILayout.EndVertical();
+        }
+
+        #endregion
+
+        #region 演示样例（Addressables 登记）
+
+        // 上一次登记的结果文案。null 表示还没点过。
+        private string _sampleResult;
+
+        /// <summary>
+        /// 绘制「演示样例」区块。返回是否真的绘制了——钩子为 null（未启用 ATK_ADDRESSABLE，
+        /// 或没装 Addressables）时整块跳过，连分隔线都不画。
+        /// </summary>
+        private bool DrawSampleSection()
+        {
+            if (RegisterDemoAddressables == null) return false;
+
+            EnsureStyles();
+
+            EditorGUILayout.LabelField(Tr("演示样例"), EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(
+                Tr("启用 ATK_ADDRESSABLE 后，导入的样例文件夹需要登记进 Addressables，" +
+                   "并把地址改成 VNFrameworkDemo——VnStoryManager 上的四个资源前缀就是按这个短地址写的。" +
+                   "下面的按钮代劳这一步。"),
+                EditorStyles.wordWrappedMiniLabel);
+            EditorGUILayout.Space(2);
+
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+            var status = DescribeDemoAddressables != null ? DescribeDemoAddressables() : null;
+            if (!string.IsNullOrEmpty(status))
+                EditorGUILayout.LabelField(status, status.StartsWith("  ✓") ? _styleOk : _styleWarn);
+
+            EditorGUILayout.Space(4);
+            if (GUILayout.Button(Tr("登记样例到 Addressables"), GUILayout.Height(22)))
+            {
+                // 不在 OnGUI 里直接弹对话框 / 改资产：会打乱本帧的控件计数。推到下一次编辑器 tick。
+                EditorApplication.delayCall += RunRegisterDemoAddressables;
+            }
+
+            if (!string.IsNullOrEmpty(_sampleResult))
+                EditorGUILayout.LabelField(_sampleResult, EditorStyles.wordWrappedMiniLabel);
+
+            EditorGUILayout.EndVertical();
+            return true;
+        }
+
+        private void RunRegisterDemoAddressables()
+        {
+            EditorApplication.delayCall -= RunRegisterDemoAddressables;
+            if (RegisterDemoAddressables == null) return;
+
+            try
+            {
+                _sampleResult = RegisterDemoAddressables();
+            }
+            catch (Exception e)
+            {
+                // 写 Addressables 配置失败不该把编辑器搞崩，转成可读结果并把细节留在控制台。
+                _sampleResult = Fmt("登记失败：{0}", e.Message);
+                Debug.LogException(e);
+            }
+            Repaint();
         }
 
         #endregion
