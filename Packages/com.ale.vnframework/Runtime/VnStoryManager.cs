@@ -350,6 +350,31 @@ namespace Ale.VnFramework
         }
         #endregion
         
+        #region 演出日志
+
+        /// <summary>
+        /// 演出流水日志。<b>只用于「发生了什么」的流水记录，不要拿它报错</b>——
+        /// 真正的告警仍应直接用 <c>Debug.LogWarning</c>，那些在发行版里必须保留。
+        ///
+        /// <para><b>为什么用 <c>[Conditional]</c> 而不是运行时开关</b>：
+        /// <c>Debug.Log($"…")</c> 的插值串在**调用之前**就构造好了，
+        /// <c>Debug.unityLogger</c> 的过滤、乃至 <c>if (flag)</c> 守卫都救不了实参求值。
+        /// <c>[Conditional]</c> 是**调用点**消除——符号没定义时，连同实参一起从 IL 里消失。</para>
+        ///
+        /// <para>多个 <c>[Conditional]</c> 之间是「或」：编辑器内照常输出；
+        /// 发行版默认静默，想要日志就自行定义 <c>VNS_VERBOSE_LOG</c>。
+        /// 这一路演出日志逐条对话都会刷，不门控的话会淹掉玩家的 log 文件——
+        /// 顺带一提，Dialogue System 自己的 info 级日志默认就是关的（<c>DialogueDebug.level</c>
+        /// 默认为 <c>Warning</c>，且叠了 <c>Debug.isDebugBuild</c>）。</para>
+        ///
+        /// <para>包内 <c>NullVnAudioBackend.WarnOnce</c> 是同款写法。</para>
+        /// </summary>
+        [System.Diagnostics.Conditional("UNITY_EDITOR")]
+        [System.Diagnostics.Conditional("VNS_VERBOSE_LOG")]
+        private static void LogVerbose(string message) => Debug.Log(message);
+
+        #endregion
+
         #region 资源加载与卸载
         // 加载中的资源 计数器。
         private readonly Dictionary<string, int> _dicLoadingAssetCounter = new Dictionary<string, int>();
@@ -760,7 +785,7 @@ namespace Ale.VnFramework
         {
             if (string.IsNullOrEmpty(actorName))
             {
-                Debug.LogWarning($"剧情演出 >> 设置对话头像时，actorName 为空，无法通过 DialogueManager 绑定头像。");
+                Debug.LogWarning("剧情演出 >> 设置对话头像时，actorName 为空，无法通过 DialogueManager 绑定头像。");
                 return;
             }
             
@@ -787,7 +812,7 @@ namespace Ale.VnFramework
 #else
             _dialogueHeadAssetName = headImageName;
 #endif
-            Debug.Log($"剧情演出 >> 设置对话头像为 '{_dialogueHeadAssetName}'。");
+            LogVerbose($"剧情演出 >> 设置对话头像为 '{_dialogueHeadAssetName}'。");
 
             // 加载 头像图片
             LoadAsset<UnityEngine.Object>(_dialogueHeadAssetName, (asset) =>
@@ -1052,7 +1077,7 @@ namespace Ale.VnFramework
             _backgroundAssetName = $"{backgroundAddressableFolder}{backgroundName}{backgroundAddressableExtension}";
 #endif
             // 日志输出
-            Debug.Log($"剧情演出 >> 设置背景图像为 '{_backgroundAssetName}'。");
+            LogVerbose($"剧情演出 >> 设置背景图像为 '{_backgroundAssetName}'。");
             
             // 加载图像资源。把本次请求的地址一并带进回调：加载是异步的，回来时可能已经不是当前背景了。
             var requestedAddress = _backgroundAssetName;
@@ -1380,7 +1405,7 @@ namespace Ale.VnFramework
             if (string.IsNullOrEmpty(actorAssetPrefab)) return;
 
             // 日志输出
-            Debug.Log($"剧情演出 >> 加载Actor预制体 '{actorAssetPrefab}'。");
+            LogVerbose($"剧情演出 >> 加载Actor预制体 '{actorAssetPrefab}'。");
             
             // 加载角色预制体
             Action<GameObject> onAssetLoaded = (asset) =>
@@ -1402,7 +1427,7 @@ namespace Ale.VnFramework
                 // 只在实例上取一次：此前预制体资产与实例上各取了一次，前一次的结果只用来判空。
                 var actorAnimator = actorPrefabInstance.GetComponent<VnActorAnimator>();
                 if (!actorAnimator)
-                    Debug.Log($"剧情演出 >> Actor预制体 '{actorAssetPrefab}' 未挂载 VnActorAnimator，按普通预制体处理（无淡入淡出与动画状态）。");
+                    LogVerbose($"剧情演出 >> Actor预制体 '{actorAssetPrefab}' 未挂载 VnActorAnimator，按普通预制体处理（无淡入淡出与动画状态）。");
 
                 // 记录 角色预制体
                 var actorAnimsLoadData = new FActorPrefabLoadData
