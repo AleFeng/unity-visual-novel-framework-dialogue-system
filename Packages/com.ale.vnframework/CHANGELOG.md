@@ -40,6 +40,10 @@ Dialogue System 默认没有 asmdef、其代码正落在 `Assembly-CSharp` 里�
   后两条是为 `VNS_FS_GAMEFRAMEWORK` 常驻的——`Fs.Utility` 容易漏，因为
   `AudioManager` 的基类 `MonoBehaviourSingleton<T>` 在那里，而 asmdef 引用不传递。
   Unity 对按名字解析不到的 asmdef 引用静默跳过，故没装 Fs 的工程不会收到警告。
+- **包内 README 末尾新增「API 参考」章节** —— 供二次开发查阅：逐条列出五个运行时类型与音频后端的
+  公开签名、默认参数与行为陷阱（`StartVnStory` 重入是空操作、`PlayAnim` 回调不触发的 5 种情形、
+  `SwitchStateArray` 传空数组会隐藏角色、位移接口是速度制且未激活时瞬置等）。
+  只做剧情配置的使用者无需阅读。
 - **可替换的音频后端** —— `IVnAudioBackend` 接口 + `VnStoryAudio` 静态门面 +
   `NullVnAudioBackend` 默认空实现。**接入自己的音频系统只需实现四个原语并赋值给
   `VnStoryAudio.Backend`，不需要定义任何编译宏、也不需要改动本包源码。**

@@ -256,3 +256,166 @@ com.ale.vnframework/
 - [为 Dialogue System 补 Assembly Definitions](Docs~/Setup/PixelCrushers/README.md) —— 安装前置条件的
   操作步骤与原理（**不做则本包编译不过**）。
 - [更新日志](CHANGELOG.md) ｜ [许可](LICENSE.md)
+
+---
+
+## API 参考
+
+> **本章仅供二次开发参考。** 只做剧情配置的话不需要读——演出全部由对话节点上的字段条目驱动，
+> 上面的章节已经够用。这里列的是从 C# 侧调用框架时的公开接口。
+>
+> 全部类型位于命名空间 `Ale.VnFramework`，程序集 `Ale.VnFramework`。
+> 包内**没有任何 C# `event`**，也**没有任何 `[Obsolete]` 成员**。
+> `VnActorAnimator` 与 `VnResponseButton` 的配置项**全是 `[SerializeField] private`**，只能在 Inspector 配。
+
+### `VnStoryManager`
+
+```csharp
+public class VnStoryManager : ToolkitMonoSingleton<VnStoryManager>
+```
+
+演出核心单例。静态入口 `VnStoryManager.Instance` 与 `VnStoryManager.IsQuitting` 由基类
+（`com.ale.toolkit` 的 `ToolkitMonoSingleton<T>`）提供。
+
+⚠️ **`Instance` 不会惰性创建**：场景里没有 `VnStoryManager` 组件跑过 `Awake` 时它是 `null`。
+退出播放模式时 `Instance` 不会变 `null`，所以拆卸路径上要先查 `IsQuitting`（`VnStoryPlayer.Stop()` 正是这么做的）。
+
+| 成员 | 说明 |
+|---|---|
+| `void StartVnStory(string conversationName = null)` | 开始演出。⚠️ **已在播放时整个方法是空操作**——第二次调用不会切到新对话。 |
+| `void StopVnStory(bool clearAllData = true)` | 停止演出。⚠️ 停对话发生在 UI 淡出的**完成回调**里，不是同步；且仅当 `clearAllData` 为 true 时才停。 |
+| `string[] GetAllConversationName()` | 取剧情库中全部对话名。 |
+| `void RegisterGameplaySystem(string fieldTitle, Action<string> callback)` | 按**任意**字段标题接管演出流程：节点上出现该标题且值非空时，回调收到其 `Value`。重复注册会覆盖并告警。 |
+| `void UnregisterGameplaySystem(string fieldTitle)` | 注销。传空值时静默忽略。 |
+| `void RegisterVariableGetter(string variableName, Func<object> valueGetter)` | 把宿主变量同步进 Dialogue System 的 Lua 环境。⚠️ **没有反注册方法**；重复注册会覆盖并告警。 |
+| `void SetAllVariablesToDialogueSystem()` | 立刻把已注册的变量全部推给 Dialogue System。每段对话开始时会自动调用一次。 |
+| `float backgroundFadeDuration` | 公开字段，背景淡入淡出时长（秒），默认 `0.3`。 |
+| `string ConversationResponseButtonVariableIsReadFieldTitle { get; }` | 只读。选项「是否已读」所用的 Lua 变量名，`VnResponseButton` 读它。 |
+
+剧本侧还可用 Lua 函数 `BackgroundFadeDuration(duration)` 在对话中改背景淡入淡出时长（非 C# API）。
+
+### `VnStoryPlayer`
+
+```csharp
+public class VnStoryPlayer : MonoBehaviour
+public enum VnStoryPlayer.AutoPlayTiming { Manual, OnStart, OnEnable }
+```
+
+| 成员 | 说明 |
+|---|---|
+| `void Play()` | 用当前 `ConversationName` 播放。可直接绑到 Button 的 OnClick。名称为空时告警并返回。 |
+| `void Play(string conversationNamePlay)` | 播放指定对话，并把名称记进 `ConversationName`。 |
+| `void Stop()` | 停止。**只停由本组件播放的那段**（当前对话名需与 `ConversationName` 一致）。 |
+| `string ConversationName { get; set; }` | 当前要播放的对话名。 |
+| `bool IsPlaying { get; private set; }` | 是否正在播放。由 Dialogue System 的 `conversationEnded` 置回 false。 |
+| `UnityEvent OnPlayStarted { get; }` | 只读属性，返回可 `AddListener` 的实例（非泛型 `UnityEvent`）。 |
+| `UnityEvent OnPlayEnded { get; }` | 同上。⚠️ 对话因**任何**原因结束都会触发，不限于本组件调用 `Stop()`。 |
+
+### `VnActorAnimator`
+
+```csharp
+public class VnActorAnimator : MonoBehaviour
+```
+
+演出层与动画后端之间的唯一接缝。所有播放 / 状态 / 皮肤接口都经**就绪门控**，
+在动画器初始化完成前调用会自动挂起，**不依赖帧序**。
+
+**就绪与生命周期**
+
+| 成员 | 说明 |
+|---|---|
+| `bool IsActorReady { get; }` | 是否已完成过一次 `ExecuteInit`。没有动画器的普通预制体也会正常置位。 |
+| `void RunWhenReady(Action action)` | 就绪则**同步立即**执行；否则挂起，按登记顺序执行一次。从未 `ExecuteInit` 过则永不执行。 |
+| `void ExecuteInit(Vector3 toPos, Vector3 toRot, Vector3 toScale, string[] toStateArray)` | 落位 → 激活 → 就绪后淡入并切到目标状态。`toStateArray` 传 `null` = 沿用预制体自身初始状态；传**空数组** = 明确不进入任何状态。会先 `StopAllAnims()` 并掐掉在途补间。 |
+| `void ExecuteDestroy(Action onComplete = null)` | 销毁。按「动画淡出」与「粒子生命期」取较大者延迟；`onComplete` 在对象已销毁后仍会触发。 |
+| `bool FadeOut()` / `bool FadeIn()` | 临时隐藏 / 恢复，不销毁。返回值 = **是否由本方法处理了**（无动画器也无粒子的普通预制体返回 false，需外部自行 SetActive）。 |
+
+**位移 / 旋转 / 缩放**（速度制，不是时长制）
+
+| 成员 | 说明 |
+|---|---|
+| `void SetToPosition(Vector3 targetPos, float speedRate = 1f)` | 时长由「距离 ÷ (配置速度 × speedRate)」推出。⚠️ 对象未激活时直接**瞬置**而非补间。 |
+| `void SetToRotation(Vector3 targetRot, float speedRate = 1f)` | 取最短弧。 |
+| `void SetToScale(Vector3 targetScale, float speedRate = 1f)` | |
+| `void CompleteTransformTween()` | 立刻完成在途的移动 / 旋转 / 缩放，并触发其完成回调。 |
+
+**状态列表**
+
+| 成员 | 说明 |
+|---|---|
+| `void SwitchStateArray(string[] actorAnims)` | 差集移除旧状态、差集添加新状态。⚠️ **传空数组会把角色淡出隐藏**——渲染器引用计数归零所致。只想换动画时别传空数组。 |
+| `void AddState(string state)` / `void RemoveState(string state)` | 增 / 删单个状态。已存在 / 不存在时不处理。 |
+
+**单条动画**（叠加在状态动画之上，不改变状态列表）
+
+```csharp
+bool PlayAnim(
+    string animName,
+    EAnimTrack animTrack = EAnimTrack.Action,
+    int animTrackSub = 0,
+    bool isLoop = false,
+    bool isReverse = false,
+    float speed = 1f,
+    float startDelayTime = 0f,
+    Action onComplete = null)
+```
+
+返回值 = **是否受理了这次请求**；`false` 表示明确不会播、也不会有回调（动画器缺失 / 名称为空 / `speed≈0`）。
+
+⚠️ **`onComplete` 在以下五种情形一律不触发**：① `isLoop` 为 true（调用时会告警）；② `speed` 为 0（返回 false）；
+③ 动画名查不到（返回 **true**，但 `IsAnimPlaying` 随即为 false）；④ 动画时长为 0；
+⑤ 被 `StopAnim` / `StopAllAnims` / 新一轮 `ExecuteInit` 打断。
+
+⚠️ **完成时刻是「时长 ÷ 速度」的定时器估算**，不是后端的结束事件——需要严格同步的场合不要依赖它。
+
+| 成员 | 说明 |
+|---|---|
+| `bool StopAnim(string animName)` | 停止指定单条动画，该轨道上被它压住的上一条自动恢复。返回是否确实停掉了一条。 |
+| `void StopAllAnims()` | 停止全部单条动画，不影响状态动画。 |
+| `bool IsAnimPlaying(string animName)` | 是否在播（含仍在等待起播延时的）。读的是本组件的记账，不是后端状态。 |
+
+**换装 / 皮肤**
+
+| 成员 | 说明 |
+|---|---|
+| `void SetBaseSkin(string[] baseSkinNames, bool isRefresh = true)` | 设置基础皮肤组，覆盖预制体上配置的那一组。 |
+| `void AddSkin(string skinName, bool isRefresh = true)` | 添加皮肤，可叠加多件。**没有**「同部位只能穿一件」的互斥语义。 |
+| `void RemoveSkin(string skinName, bool isRefresh = true)` | 移除皮肤。 |
+| `void RefreshSkin()` | 把基础皮肤与应用中皮肤的并集重新应用到渲染器。 |
+
+> 批量增删时前几次传 `isRefresh: false`、最后一次传 `true`，避免重复刷新。
+
+### `VnResponseButton`
+
+```csharp
+public class VnResponseButton : StandardUIResponseButton
+public override Response response { get; set; }
+```
+
+派生自 Dialogue System 的 `StandardUIResponseButton`。`response` 是覆写基类的属性（故为小写命名）；
+被赋值时按「是否已读」刷新文本颜色、按钮颜色、提示对象与图片颜色。
+
+### 音频后端
+
+```csharp
+public enum EVnAudioCategory { Bgm, Ambient, Sfx, Voice }
+
+public interface IVnAudioBackend
+{
+    void PlayWithChannel(EVnAudioCategory category, string channelName, string audioKey, float volume, float pitch);
+    void StopWithChannel(EVnAudioCategory category, string channelName);
+    void Play(EVnAudioCategory category, string audioKey, float volume, float pitch);
+    void Stop(EVnAudioCategory category, string audioKey);
+}
+
+public static class VnStoryAudio
+{
+    public static IVnAudioBackend Backend { get; set; }   // 永不为 null；未赋值时返回空实现
+    public static bool IsAvailable { get; }               // 是否已接入真实后端
+    // 四个与接口同签名的静态转发方法
+}
+
+public sealed class NullVnAudioBackend : IVnAudioBackend  // 单例 NullVnAudioBackend.Instance
+```
+
+接入方式与注意事项见上文 [音频接缝](#音频接缝)。

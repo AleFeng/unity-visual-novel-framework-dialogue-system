@@ -271,6 +271,9 @@ UI 样式定制、运行时 API——请见插件内文档：
 
 👉 **[Packages/com.ale.vnframework/README.md](Packages/com.ale.vnframework/README.md)**
 
+二次开发（从 C# 侧调用框架）另见该文档末尾的
+**[API 参考](Packages/com.ale.vnframework/README.md#api-参考)** 章节——只做剧情配置的话不需要读。
+
 - [VnStoryManager 使用文档](Packages/com.ale.vnframework/Docs~/VnStoryManager/VnStoryManager.md) —
   资源配置 / 资源导入 / 剧情演出配置 / UI 样式 / 功能示例的逐项图文说明（含演示视频）
 - [为 Dialogue System 补 Assembly Definitions](Packages/com.ale.vnframework/Docs~/Setup/PixelCrushers/README.md) —
