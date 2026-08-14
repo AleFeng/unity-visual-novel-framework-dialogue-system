@@ -1,3 +1,5 @@
+using UnityEngine;
+
 namespace Ale.VnFramework
 {
     /// <summary>
@@ -18,6 +20,24 @@ namespace Ale.VnFramework
     public static class VnStoryAudio
     {
         private static IVnAudioBackend _backend;
+
+        /// <summary>
+        /// 每次进入播放前把后端清空。
+        ///
+        /// <para>关闭 Enter Play Mode Options 的「Reload Domain」后，静态字段不会随退出播放而重置：
+        /// 上一次会话赋的后端会活到下一次，而它若由 MonoBehaviour 支撑，此时已指向被销毁的对象；
+        /// 更麻烦的是 <c>FsVnAudioBackend.Install</c> 靠 <see cref="IsAvailable"/> 判断「是否已有人接管」，
+        /// 残留的后端会让自动注册**永久跳过**。</para>
+        ///
+        /// <para><c>SubsystemRegistration</c> 早于所有 <c>BeforeSceneLoad</c> 的注册方法，
+        /// 因此清空一定发生在各后端自动注册之前，不会把它们刚装好的实例抹掉。
+        /// 与所依赖的 <c>com.ale.toolkit</c> 里 <c>ToolkitSingletonRegistry</c> 是同一套做法。</para>
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStatics()
+        {
+            _backend = null;
+        }
 
         /// <summary>
         /// 当前音频后端。未赋值时返回 <see cref="NullVnAudioBackend"/>，故本属性<b>永不为 null</b>，

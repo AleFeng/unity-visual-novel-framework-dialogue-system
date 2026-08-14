@@ -28,18 +28,39 @@ namespace Ale.VnFramework
             VnStoryAudio.Backend = new FsVnAudioBackend();
         }
 
+        /// <summary>
+        /// 取 Fs 的音频管理器，取不到则返回 null。
+        ///
+        /// <para>场景里没有 <c>AudioManager</c> 是完全可能的（还没搭好、或某个场景不需要音频）。
+        /// 而音频接缝的契约是「不报错、不出声、不抛异常」——演出流程不该因为没配音频就断掉。
+        /// 裸解引用 <c>Instance</c> 会让宏一开就每行对话 NRE，正好违反这条契约。</para>
+        /// </summary>
+        private static AudioManager Manager => AudioManager.Instance ? AudioManager.Instance : null;
+
         // 只传这四个参数，后端的 fadeDuration / replaySameOne / playIntervalMin 保持其默认值。
         public void PlayWithChannel(EVnAudioCategory category, string channelName, string audioKey, float volume, float pitch)
-            => AudioManager.Instance.PlayWithChannel(channelName, audioKey, volume, pitch);
+        {
+            var manager = Manager;
+            if (manager) manager.PlayWithChannel(channelName, audioKey, volume, pitch);
+        }
 
         public void StopWithChannel(EVnAudioCategory category, string channelName)
-            => AudioManager.Instance.StopWithChannel(channelName);
+        {
+            var manager = Manager;
+            if (manager) manager.StopWithChannel(channelName);
+        }
 
         public void Play(EVnAudioCategory category, string audioKey, float volume, float pitch)
-            => AudioManager.Instance.Play(audioKey, volume, pitch);
+        {
+            var manager = Manager;
+            if (manager) manager.Play(audioKey, volume, pitch);
+        }
 
         public void Stop(EVnAudioCategory category, string audioKey)
-            => AudioManager.Instance.Stop(audioKey);
+        {
+            var manager = Manager;
+            if (manager) manager.Stop(audioKey);
+        }
     }
 }
 #endif

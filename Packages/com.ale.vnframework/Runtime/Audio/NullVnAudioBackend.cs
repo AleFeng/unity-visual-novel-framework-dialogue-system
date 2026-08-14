@@ -20,8 +20,16 @@ namespace Ale.VnFramework
         public void Play(EVnAudioCategory category, string audioKey, float volume, float pitch) => WarnOnce();
         public void Stop(EVnAudioCategory category, string audioKey) => WarnOnce();
 
-        // 一次会话只提示一次：没有后端时演出照样会逐条对话调用这些接口，逐次刷日志没有意义。
+        // 一次运行只提示一次：没有后端时演出照样会逐条对话调用这些接口，逐次刷日志没有意义。
         private static bool _warned;
+
+        // 关闭「Reload Domain」后静态字段跨播放会话存活，不重置的话这条提示就变成「一个编辑器会话一次」，
+        // 第二次进入播放时即使仍未接后端也不会再提醒。理由同 VnStoryAudio.ResetStatics。
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStatics()
+        {
+            _warned = false;
+        }
 
         // 仅编辑器内提示；打包后的构建不需要这条噪音。
         [System.Diagnostics.Conditional("UNITY_EDITOR")]

@@ -6,7 +6,6 @@
         "DialogueSystem",
         "Ale.Toolkit.Runtime",
         "Ale.AnimSimulatorSystem",
-        "Unity.TextMeshPro",
         "Unity.Localization",
         "Fs.GameFramework.Common.AudioSystem",
         "Fs.Utility"

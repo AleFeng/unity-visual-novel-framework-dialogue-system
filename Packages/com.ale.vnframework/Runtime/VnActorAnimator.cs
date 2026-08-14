@@ -92,9 +92,19 @@ namespace Ale.VnFramework
 
             if (!m_ActorAnimator.isActiveAndEnabled)
             {
-                // 动画播放器所在物体仍未激活、或组件被禁用：它的 Start 不会执行，就绪信号永远不会到。
+                // 动画播放器所在物体仍未激活、或组件被禁用：它的 Start 不会执行，就绪信号本轮不会到。
                 // 不静默——否则角色会「加载成功但永远不出现」，且没有任何线索。
-                Debug.LogWarning($"剧情演出 >> '{name}' 的动画播放器 '{m_ActorAnimator.name}' 未激活，动画初始化被跳过。");
+                int discarded = _pendingReadyActions?.Count ?? 0;
+                Debug.LogWarning($"剧情演出 >> '{name}' 的动画播放器 '{m_ActorAnimator.name}' 未激活，动画初始化被跳过。"
+                                 + (discarded > 0 ? $"已丢弃 {discarded} 个挂起的操作。" : string.Empty));
+
+                // 丢弃挂起队列。此前这里既不 MarkActorReady 也不清队列，于是 RunWhenReady 的闭包
+                // 会逐行对话无限堆积、永远排不空。就算之后对象被别处激活，重放一堆陈旧的状态切换也没有意义
+                // ——真正该生效的是最新那一次。
+                _pendingReadyActions = null;
+
+                // 仍然订阅：对象若在别处被激活，AnimatorBase.Start 会跑，届时还能正常就绪。
+                m_ActorAnimator.OnInitComplete += OnAnimatorInitComplete;
                 return;
             }
 
@@ -240,9 +250,6 @@ namespace Ale.VnFramework
         private bool _isActorReady;
         // 等待就绪的挂起操作
         private List<Action> _pendingReadyActions;
-        // 排空挂起队列时的暂存表，提为字段免得每次都新分配
-        private readonly List<Action> _readyActionScratch = new List<Action>();
-
         /// <summary>
         /// 是否已就绪：至少完成过一次 <see cref="ExecuteInit"/>（已落位、已淡入、已切到目标状态）。
         /// <para>与 <c>AnimatorBase.IsInitComplete</c> 的区别：那条只说「动画播放器初始化完毕」；
@@ -268,12 +275,14 @@ namespace Ale.VnFramework
             _isActorReady = true;
             if (_pendingReadyActions == null || _pendingReadyActions.Count == 0) return;
 
-            // 先快照再清空：挂起的操作里可能又调 RunWhenReady，此时已就绪、会走同步分支，不会回写本表
-            _readyActionScratch.Clear();
-            _readyActionScratch.AddRange(_pendingReadyActions);
-            _pendingReadyActions.Clear();
-            foreach (var action in _readyActionScratch) action();
-            _readyActionScratch.Clear();
+            // 把整张表摘下来交给局部变量，而不是共用一张实例暂存表。
+            // 挂起的操作里可以合法地同步触发 ExecuteInit → OnAnimatorInitComplete → 本方法重入
+            // （已就绪时本组件明确支持同步回调）；若两次调用共用同一张实例表，
+            // 重入的那次会 Clear 掉外层 foreach 正在枚举的表，当场抛 InvalidOperationException。
+            // 摘表之后重入会在上面那行 null 判断处直接返回，天然安全。
+            var actions = _pendingReadyActions;
+            _pendingReadyActions = null;
+            for (int i = 0; i < actions.Count; i++) actions[i]();
         }
         #endregion
 

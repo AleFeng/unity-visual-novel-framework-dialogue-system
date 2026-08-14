@@ -98,6 +98,14 @@ namespace Ale.VnFramework
                 return;
             }
 
+            // 已在播放同一段：直接忽略。Button.OnClick 连点两下会走到这里，
+            // 不拦的话 onPlayStarted 会重复触发，而 onPlayEnded 只会来一次。
+            if (IsPlaying && conversationName == conversationNamePlay)
+            {
+                Debug.LogWarning($"[VnStoryPlayer] Play >> '{conversationNamePlay}' 正在播放中，本次调用已忽略。", this);
+                return;
+            }
+
             // 记录本次播放的对话名称
             conversationName = conversationNamePlay;
 
@@ -235,6 +243,12 @@ namespace Ale.VnFramework
         private void OnConversationEnded(Transform actor)
         {
             if (!IsPlaying) return;
+
+            // 校验是不是本组件那段剧情结束了。DialogueManager.conversationEnded 对**任何**对话都触发，
+            // 包括别的播放器启动的、以及嵌套 / 联动的对话；不校验的话，别人结束会误清本组件的 IsPlaying
+            // 并误发 onPlayEnded。Stop() 一直是这么校验的，这里补齐。
+            if (!string.IsNullOrEmpty(conversationName) &&
+                DialogueManager.lastConversationStarted != conversationName) return;
 
             IsPlaying = false;
             Unsubscribe();

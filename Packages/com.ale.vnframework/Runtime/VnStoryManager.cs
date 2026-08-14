@@ -76,9 +76,14 @@ namespace Ale.VnFramework
             base.OnDestroy();
             if (!isSingletonInstance) return;
 
+            // 注销Lua函数。必须与 Awake 的注册配对：Lua 环境是静态的，注册项会强引用 this，
+            // 而 Dialogue System 的 RegisterFunction 不是覆盖语义——同名函数再次注册时它只打一条
+            // 「已注册」日志并**保留旧绑定**。不注销的话，下一个 VnStoryManager 注册会被忽略，
+            // 剧本里的 BackgroundFadeDuration() 从此驱动的是已销毁的那个实例。
+            Lua.UnregisterFunction("BackgroundFadeDuration");
             // 注销持久化数据
             PersistentDataManager.UnregisterPersistentData(gameObject);
-            
+
 #if ATK_LOCALIZATION
             // 销毁 多语言
             OnDestroyLocalization();
@@ -1256,18 +1261,18 @@ namespace Ale.VnFramework
             // 停止所有延迟激活的Actor的延时
             StopAllActorDelayTweens();
 
-            // 卸载 所有角色预制体
+            // 卸载 所有角色预制体。
+            // 先快照键：UnloadActorPrefab 会从 _mapActorAnimator 里移除条目，不能直接对字典遍历。
             var actorFieldTitleList = new List<string>(_mapActorAnimator.Keys);
-            var actorPrefabLoadDataList = new List<FActorPrefabLoadData>(_mapActorAnimator.Values);
             foreach (var actorFieldTitleName in actorFieldTitleList)
             {
                 UnloadActorPrefab(actorFieldTitleName);
             }
-            // 销毁 所有角色实例
-            foreach (var data in actorPrefabLoadDataList)
-            {
-                if (data.PrefabInstance) Destroy(data.PrefabInstance);
-            }
+
+            // 这里一度还有第二个循环，把所有实例同帧 Destroy 一遍——
+            // 那正好抵消了 UnloadActorPrefab 刻意安排的延迟销毁（Spine 淡出、在途粒子播完再回收），
+            // 对话结束这条路径上「不能把在途粒子拦腰截断」的取舍因此完全失效。已删除。
+            // 资源计账不受影响：延时回调里的 UnloadAsset 本就带 `if (instance)` 守卫，照常执行。
         }
         
         /// <summary>
@@ -1943,6 +1948,9 @@ namespace Ale.VnFramework
         #region 游戏玩法注册
         // Key=Fields的Title名称, Value=玩法系统的回调方法
         private readonly Dictionary<string, Action<string>> _gameplaySystemRegistry = new Dictionary<string, Action<string>>();
+        // 遍历用的快照缓冲。回调是宿主代码，可能在其中增删注册项，不能直接对字典 foreach。
+        private readonly List<KeyValuePair<string, Action<string>>> _gameplaySystemScratch =
+            new List<KeyValuePair<string, Action<string>>>();
 
         /// <summary>
         /// 注册 玩法系统。
@@ -1993,7 +2001,15 @@ namespace Ale.VnFramework
         /// <param name="subtitle"></param>
         private void OnConversationLineGamePlaySystem(Subtitle subtitle)
         {
-            foreach (var kvp in _gameplaySystemRegistry)
+            if (_gameplaySystemRegistry.Count == 0) return;
+
+            // 先快照再遍历：下面调的是宿主工程的回调，它完全可能在里面
+            // RegisterGameplaySystem / UnregisterGameplaySystem（比如小游戏结束后登记后续处理器），
+            // 直接对字典 foreach 会当场抛 InvalidOperationException。
+            _gameplaySystemScratch.Clear();
+            foreach (var kvp in _gameplaySystemRegistry) _gameplaySystemScratch.Add(kvp);
+
+            foreach (var kvp in _gameplaySystemScratch)
             {
                 var fieldTitle = kvp.Key;
                 var callback = kvp.Value;
@@ -2007,6 +2023,7 @@ namespace Ale.VnFramework
                     callback?.Invoke(value);
                 }
             }
+            _gameplaySystemScratch.Clear();
         }
         #endregion
         
@@ -2216,7 +2233,10 @@ namespace Ale.VnFramework
         #region 变量注册
         // Key变量名:Value变量值的获取方法
         private readonly Dictionary<string, Func<object>> _variableGetterRegistryMap = new Dictionary<string, Func<object>>();
-        
+        // 遍历用的快照缓冲，理由同 _gameplaySystemScratch。
+        private readonly List<KeyValuePair<string, Func<object>>> _variableGetterScratch =
+            new List<KeyValuePair<string, Func<object>>>();
+
         /// <summary>
         /// 注册 变量与变量值获取器
         /// </summary>
@@ -2240,18 +2260,26 @@ namespace Ale.VnFramework
         /// </summary>
         public void SetAllVariablesToDialogueSystem()
         {
-            foreach (var kvp in _variableGetterRegistryMap)
+            if (_variableGetterRegistryMap.Count == 0) return;
+
+            // 同 OnConversationLineGamePlaySystem：getter 是宿主代码，可能在其中调 RegisterVariableGetter，
+            // 直接对字典 foreach 会抛 InvalidOperationException。先快照。
+            _variableGetterScratch.Clear();
+            foreach (var kvp in _variableGetterRegistryMap) _variableGetterScratch.Add(kvp);
+
+            foreach (var kvp in _variableGetterScratch)
             {
                 string varName = kvp.Key;
                 // 执行委托，实时获取外部系统的当前值
                 Func<object> getter = kvp.Value;
                 if (getter == null) continue;
-                object varValue = getter.Invoke(); 
+                object varValue = getter.Invoke();
                 if (varValue == null) continue;
-                
+
                 // 调用 DialogueLua 写入 DialogueSystem（内部会根据运行时类型转换为对应的 Lua 值）
                 DialogueLua.SetVariable(varName, varValue);
             }
+            _variableGetterScratch.Clear();
         }
         #endregion
     }
