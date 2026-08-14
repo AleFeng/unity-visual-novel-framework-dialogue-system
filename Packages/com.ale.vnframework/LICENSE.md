@@ -2,6 +2,15 @@ MIT License
 
 Copyright (c) 2026 Ale
 
+注意：本授权覆盖本包自己的代码与文档。`Samples~` 内的第三方美术与特效资源
+（Cartoon FX Remaster、Spine 骨骼数据等）不在此范围内，各自遵循原有许可，
+详见同目录下的 `Third Party Notices.md`。
+
+Note: this license covers this package's own code and documentation. Third-party
+art and effect assets bundled under `Samples~` (Cartoon FX Remaster, Spine skeleton
+data, etc.) are NOT covered and remain under their original licenses. See
+`Third Party Notices.md` in this folder.
+
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights

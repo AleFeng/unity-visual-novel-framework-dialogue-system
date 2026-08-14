@@ -141,7 +141,7 @@ https://github.com/AleFeng/unity-visual-novel-framework-dialogue-system.git?path
 这样装的是 `main` 的最新提交。**要固定版本，把 `#<tag>` 加在整条 URL 的最末尾**（必须在 `?path=` 之后）：
 
 ```
-https://github.com/AleFeng/unity-visual-novel-framework-dialogue-system.git?path=/Packages/com.ale.vnframework#1.0.0
+https://github.com/AleFeng/unity-visual-novel-framework-dialogue-system.git?path=/Packages/com.ale.vnframework#1.2.0
 ```
 
 可用的 tag 见 [Releases](https://github.com/AleFeng/unity-visual-novel-framework-dialogue-system/releases)。
@@ -151,9 +151,13 @@ https://github.com/AleFeng/unity-visual-novel-framework-dialogue-system.git?path
 （剧情库 `StoryDatabase` + 管理器与播放器预制体 + Spine 角色与特效资源 + 对话 UI + 示例场景），
 可直接进 Play 体验完整演出流程。
 
-> ⚠️ **启用了 `ATK_ADDRESSABLE` 时需要做一步登记**：把导入后的 `VN Framework Demo` 文件夹拖进
-> Addressables 分组，并把该条目的 **Address 改成 `VNFrameworkDemo`**。
+> ⚠️ **启用了 `ATK_ADDRESSABLE` 时需要做一步登记**：把导入后的 `VN Framework Demo` 文件夹加入
+> Addressables 分组，并把该条目的 **Address 设为 `VNFrameworkDemo`**。
 > `VnStoryManager` 上的四个资源前缀（`VNFrameworkDemo/Assets/Actors/` 等）就是按这个短地址写的。
+>
+> **自 1.2.0 起有一键登记**：打开[欢迎窗口](#️-欢迎窗口)（`Tools > Ale Toolkit > VN Framework > Welcome`）
+> → **演示样例** → 点「登记样例到 Addressables」。它会自动找到导入后的样例目录、写入默认分组并设好地址；
+> 已经登记好则报告现状、不做改动。手工拖拽的老办法同样有效。
 >
 > 自 1.1.0 起改用这种**固定短地址**，而不是完整资产路径——后者会随包版本号变化
 > （样例落地路径是 `Assets/Samples/{包名}/{版本}/…`），每次发版都得重改一遍前缀。
@@ -233,10 +237,14 @@ Tools > Ale Toolkit > VN Framework > Welcome
 
 自上而下：**前置条件自检**（检查 Dialogue System 的 Assembly Definitions 是否就位，
 尤其是那条**编辑器不报错、只在出包时才失败**的编辑器模板脚本混入运行时程序集问题）、
-**插件支持（编译宏）**（`VNS_FS_GAMEFRAMEWORK` 一键开关）、**文档入口**、**启动时自动显示**。
+**插件支持（编译宏）**（`VNS_FS_GAMEFRAMEWORK` 一键开关）、**演示样例**（Addressables 条目一键登记）、
+**文档入口**、**启动时自动显示**。
 
 > 界面语言与 `ATK_*` 那组宏是**项目级全局设定**，归 Ale Toolkit 的欢迎窗口统一管理，
 > 本窗口顶部提供跳转按钮。
+>
+> 「演示样例」一栏只在启用 `ATK_ADDRESSABLE` **且**装了 Addressables 时出现——
+> 该功能位于独立程序集，宏关闭时整块界面自动消失。
 
 ## 🖥️ 基础设置
 
@@ -296,11 +304,12 @@ Packages/com.ale.vnframework/        ← 包根
 │   ├── VnResponseButton.cs      分支选项按钮（已读 / 未读态）
 │   └── Audio/                   可替换的音频后端（IVnAudioBackend + 空实现 + Fs 实现）
 ├── Editor/
-│   ├── Ale.VnFramework.Editor.asmdef
-│   ├── VnFrameworkWelcomeWindow.cs   欢迎窗口：前置条件自检 + 插件支持 + 文档
+│   ├── Ale.VnFramework.Editor.asmdef    核心编辑器程序集（对 Addressables 零引用）
+│   ├── VnFrameworkWelcomeWindow.cs   欢迎窗口：前置条件自检 + 插件支持 + 演示样例 + 文档
 │   ├── VnFrameworkDefines.cs         VNS_FS_GAMEFRAMEWORK 宏名与依赖探测
-│   ├── VnFrameworkDefineChecker.cs   启动时按需弹出欢迎窗口（只提示，不改写宏）
+│   ├── VnFrameworkDefineChecker.cs   启动时按需弹窗 + 宏与运行时一致性告警（不改写宏）
 │   ├── VnFrameworkEditorPrefs.cs
+│   ├── Addressables/                 样例条目一键登记（ATK_ADDRESSABLE 门控的独立程序集）
 │   └── L10n/                         编辑器界面的英 / 日译表
 ├── Docs~/                       Unity 不导入（~ 后缀）
 │   ├── Setup/PixelCrushers/     ⚠ Dialogue System 的 asmdef 副本与说明
@@ -309,12 +318,14 @@ Packages/com.ale.vnframework/        ← 包根
 ```
 
 ## 📋 待办事项
-- 默认不接任何音频后端：`VnStoryAudio.Backend` 默认是空实现。已可由第三方实现 `IVnAudioBackend` 接入，
-  但仍缺一套不依赖 `com.fs.gameframework` 的现成音频管理器。
 - 一键 Demo 向导（欢迎窗口已就位，向导尚未做）。
-- 样例资源的地址前缀改为随样例自动适配，免去手工订正。
-- Addressables 条目的一键登记（目前需使用者手工把样例文件夹拖进分组并改地址为 `VNFrameworkDemo`）。
+- 欢迎窗口的 Logo（`Docs~/Images/` 尚未建立；1.2.0 已移除那段从未生效的读取代码）。
+- `VnActorAnimator` 的单条动画播放与换装接口目前只能从 C# 调用，尚无对应的剧本字段标题。
+- 循环环境音每行对话都会被停掉，需要每行重复声明；后续考虑让它像 BGM 一样走通道语义。
 
 ## 📄 许可
 本项目基于 [MIT License](LICENSE) 开源，可自由用于商业与非商业项目。
-Dialogue System 与示例中的第三方美术资源（Cartoon FX Remaster 等）各自遵循其原有许可，不在本许可范围内。
+
+⚠️ **示例里的第三方内容不在此范围内**：Cartoon FX Remaster 的特效资源、Spine 骨骼数据，
+以及作为前置依赖的 Dialogue System，各自遵循其原有许可。逐项说明见
+**[Third Party Notices](Packages/com.ale.vnframework/Third%20Party%20Notices.md)**。

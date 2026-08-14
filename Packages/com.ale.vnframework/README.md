@@ -223,7 +223,7 @@ VnStoryManager.Instance.SetAllVariablesToDialogueSystem();
 ```
 com.ale.vnframework/
 ├── Runtime/
-│   ├── Ale.VnFramework.asmdef   唯一程序集（无编辑器代码）
+│   ├── Ale.VnFramework.asmdef   运行时程序集
 │   ├── VnStoryManager.cs        演出核心：字段条目解析、背景/角色/特效/头像/消息、
 │   │                            预制体生命周期、全局变量、玩法扩展点
 │   ├── VnStoryPlayer.cs         播放控制：按对话名启停、自动播放时机
@@ -236,11 +236,18 @@ com.ale.vnframework/
 │       ├── NullVnAudioBackend.cs 默认空实现
 │       └── FsVnAudioBackend.cs  Fs 后端（VNS_FS_GAMEFRAMEWORK 门控，兼作范例）
 ├── Editor/                      欢迎窗口与编译宏开关
-│   ├── Ale.VnFramework.Editor.asmdef
-│   ├── VnFrameworkWelcomeWindow.cs   前置条件自检 + 插件支持（编译宏）+ 文档入口
+│   ├── Ale.VnFramework.Editor.asmdef  核心编辑器程序集
+│   │                            ⚠ 刻意不引用 Ale.VnFramework：运行时程序集编译失败时
+│   │                            （Dialogue System 未补 asmdef），本程序集仍需存活，
+│   │                            否则菜单项消失、使用者恰好看不到那句「怎么补 asmdef」
+│   ├── VnFrameworkWelcomeWindow.cs   前置条件自检 + 插件支持 + 演示样例 + 文档入口
 │   ├── VnFrameworkDefines.cs         VNS_FS_GAMEFRAMEWORK 宏名与依赖探测
-│   ├── VnFrameworkDefineChecker.cs   启动时按需弹窗（只提示，绝不自动改写宏）
+│   ├── VnFrameworkDefineChecker.cs   启动时按需弹窗 + 宏与运行时一致性告警（绝不改写宏）
 │   ├── VnFrameworkEditorPrefs.cs     EditorPrefs / SessionState 键
+│   ├── Addressables/                 样例条目一键登记
+│   │   ├── Ale.VnFramework.Addressables.Editor.asmdef
+│   │   │                        ATK_ADDRESSABLE + VNS_HAS_ADDRESSABLES 双重门控
+│   │   └── VnFrameworkDemoAddressables.cs  经静态 Action 钩子注入欢迎窗口
 │   └── L10n/                         编辑器界面的英 / 日译表
 ├── Docs~/                       Unity 不导入（~ 后缀）
 │   ├── Setup/PixelCrushers/     ⚠ Dialogue System 的 asmdef 副本与说明
@@ -249,8 +256,8 @@ com.ale.vnframework/
     ├── VnStorySamples.unity     示例场景
     ├── VnStoryManagerBase.prefab
     ├── Data/StoryDatabase.asset 剧情库
-    └── Assets/                  Actors(Spine) / ActorsHead / Backgrounds /
-                                 Effects / Emoji / UI / TextTable
+    └── Assets/                  Actors(Spine) / ActorsHead / Backgrounds / Effects /
+                                 Emoji / Prefab / TextTable / UI
 ```
 
 ---
