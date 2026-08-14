@@ -1,0 +1,20 @@
+{
+    "name": "Ale.VnFramework.Editor",
+    "rootNamespace": "Ale.VnFramework.Editor",
+    "references": [
+        "Ale.VnFramework",
+        "Ale.Toolkit.Runtime",
+        "Ale.Toolkit.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

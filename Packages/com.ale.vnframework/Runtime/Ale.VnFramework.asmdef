@@ -7,7 +7,9 @@
         "Ale.Toolkit.Runtime",
         "Ale.AnimSimulatorSystem",
         "Unity.TextMeshPro",
-        "Unity.Localization"
+        "Unity.Localization",
+        "Fs.GameFramework.Common.AudioSystem",
+        "Fs.Utility"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

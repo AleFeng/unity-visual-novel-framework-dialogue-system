@@ -36,7 +36,18 @@ Dialogue System 默认没有 asmdef、其代码正落在 `Assembly-CSharp` 里�
   故 `VnStoryManager` 的四个资源地址前缀对两者通用、导入后无需订正。
 - **独立程序集 `Ale.VnFramework`**（`Runtime/Ale.VnFramework.asmdef`），引用
   `PixelCrushers` / `DialogueSystem` / `Ale.Toolkit.Runtime` / `Ale.AnimSimulatorSystem` /
-  `Unity.TextMeshPro` / `Unity.Localization`。
+  `Unity.TextMeshPro` / `Unity.Localization` / `Fs.GameFramework.Common.AudioSystem` / `Fs.Utility`。
+  后两条是为 `VNS_FS_GAMEFRAMEWORK` 常驻的——`Fs.Utility` 容易漏，因为
+  `AudioManager` 的基类 `MonoBehaviourSingleton<T>` 在那里，而 asmdef 引用不传递。
+  Unity 对按名字解析不到的 asmdef 引用静默跳过，故没装 Fs 的工程不会收到警告。
+- **编辑器程序集 `Ale.VnFramework.Editor` 与欢迎窗口**（`Tools > Ale Toolkit > VN Framework > Welcome`）：
+  - **前置条件自检** —— 按运行时程序集 `DialogueSystem` 的源文件列表判定
+    `Templates/Scripts/Editor/` 下的纯编辑器脚本是否被卷了进去。这条**编辑器编译不报错、只在出包时失败**，
+    「控制台零错误」拦不住，故单独检测；判定与 Pixel Crushers 装在哪个目录无关。
+  - **插件支持（编译宏）** —— `VNS_FS_GAMEFRAMEWORK` 一键开关，经 toolkit 的 `DefineUtils.ApplyDefine` 写入；
+    未检测到 Fs 时勾选会先弹确认框。
+  - 版本号从 `PackageInfo` 动态读取，不写死常量。
+  - 界面语言与 `ATK_*` 宏仍归 Ale Toolkit 欢迎窗口统一管理，本窗口只提供跳转按钮。
 
 ### 变更
 
@@ -71,7 +82,7 @@ Dialogue System 默认没有 asmdef、其代码正落在 `Assembly-CSharp` 里�
   （二者在本仓库中同时定义，故本仓库无感）。
 - **音频接缝未接后端**：`VnStoryAudio` 整体包在 `VNS_FS_GAMEFRAMEWORK` 宏内，该宏默认关闭，
   此时四个播放 / 停止接口是空操作，剧情全程无声。开启该宏需要 `com.fs.gameframework`，
-  并自行在 `Ale.VnFramework.asmdef` 补上 `Fs.GameFramework.Common.AudioSystem` 引用。
+  开启需要 `com.fs.gameframework`，且须在 Fs 的音频系统中配置好 `AudioLibrary`。
 - **启用 `ATK_ADDRESSABLE` 时，导入后的样例文件夹需自行加入 Addressables 分组**。
   地址前缀本身已对齐样例落地路径、无需订正，但本包无法替使用者写入其工程的 Addressables 配置。
-- **包内暂无 `Editor/` 与欢迎窗口**，也暂无 `VnActorAnimator` 等公共接口的 API 文档。
+- **暂无一键 Demo 向导**（欢迎窗口已就位）。

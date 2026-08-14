@@ -46,6 +46,7 @@ Dialogue System 负责**对话数据、分支逻辑与 Lua 环境**，本插件�
     - [3. 按目录导入美术资源](#3-按目录导入美术资源)
     - [4. 在对话节点上配置演出](#4-在对话节点上配置演出)
     - [5. 触发播放](#5-触发播放)
+  - [🖥️ 欢迎窗口](#️-欢迎窗口)
   - [🖥️ 基础设置](#️-基础设置)
   - [🧩 可选宏开关](#-可选宏开关)
   - [📖 详细文档](#-详细文档)
@@ -218,6 +219,21 @@ VnStoryManager.Instance.StopVnStory();
 string[] names = VnStoryManager.Instance.GetAllConversationName();
 ```
 
+## 🖥️ 欢迎窗口
+
+本插件的统一入口，每次 Unity 会话首次会自动弹出一次，也可随时手动打开：
+
+```
+Tools > Ale Toolkit > VN Framework > Welcome
+```
+
+自上而下：**前置条件自检**（检查 Dialogue System 的 Assembly Definitions 是否就位，
+尤其是那条**编辑器不报错、只在出包时才失败**的编辑器模板脚本混入运行时程序集问题）、
+**插件支持（编译宏）**（`VNS_FS_GAMEFRAMEWORK` 一键开关）、**文档入口**、**启动时自动显示**。
+
+> 界面语言与 `ATK_*` 那组宏是**项目级全局设定**，归 Ale Toolkit 的欢迎窗口统一管理，
+> 本窗口顶部提供跳转按钮。
+
 ## 🖥️ 基础设置
 
 ![alt text](Packages/com.ale.vnframework/Docs~/image.png)
@@ -240,7 +256,7 @@ string[] names = VnStoryManager.Instance.GetAllConversationName();
 | `HAS_TMPRO` | 启用 TextMeshPro 文本路径（`VnResponseButton` / `VnStoryManager`） | **Fs GameFramework** 的 DefineChecker |
 | `HAS_LOCALIZATION` | 启用 Unity Localization 的多语言条目 | **Fs GameFramework** 的 DefineChecker |
 | `ATK_ADDRESSABLE` | 资源经 `ToolkitAssets` 走 Addressables，否则回落 `Resources` | Ale Toolkit 的 DefineChecker |
-| `VNS_FS_GAMEFRAMEWORK` | 把 `VnStoryAudio` 接到 Fs 的 `AudioManager` | 手工添加 |
+| `VNS_FS_GAMEFRAMEWORK` | 把 `VnStoryAudio` 接到 Fs 的 `AudioManager` | **本包欢迎窗口**的「插件支持」 |
 
 > ⚠️ `HAS_TMPRO` 与 `HAS_LOCALIZATION` 目前由 `com.fs.gameframework` 维护，**不是**本插件或 Ale Toolkit
 > 维护的。没装 Fs 的工程里这两个宏不会被自动定义，对应功能会静默关闭——需要时在 Project Settings 手工添加。
@@ -266,12 +282,19 @@ UI 样式定制、运行时 API——请见插件内文档：
 Packages/com.ale.vnframework/        ← 包根
 ├── package.json  CHANGELOG.md  LICENSE.md  README.md   ← 详细使用文档
 ├── Runtime/
-│   ├── Ale.VnFramework.asmdef   唯一程序集（无编辑器代码）
+│   ├── Ale.VnFramework.asmdef   运行时程序集
 │   ├── VnStoryManager.cs        演出核心：背景/角色/特效/头像/消息/变量/扩展点
 │   ├── VnStoryPlayer.cs         播放控制：按对话名启停、自动播放时机
 │   ├── VnActorAnimator.cs       角色动画对接层（→ AnimatorBase，后端无关）
 │   ├── VnResponseButton.cs      分支选项按钮（已读 / 未读态）
-│   └── VnStoryAudio.cs          音频接缝（默认空实现）
+│   └── VnStoryAudio.cs          音频接缝（宏关闭时为空实现）
+├── Editor/
+│   ├── Ale.VnFramework.Editor.asmdef
+│   ├── VnFrameworkWelcomeWindow.cs   欢迎窗口：前置条件自检 + 插件支持 + 文档
+│   ├── VnFrameworkDefines.cs         VNS_FS_GAMEFRAMEWORK 宏名与依赖探测
+│   ├── VnFrameworkDefineChecker.cs   启动时按需弹出欢迎窗口（只提示，不改写宏）
+│   ├── VnFrameworkEditorPrefs.cs
+│   └── L10n/                         编辑器界面的英 / 日译表
 ├── Docs~/                       Unity 不导入（~ 后缀）
 │   ├── Setup/PixelCrushers/     ⚠ Dialogue System 的 asmdef 副本与说明
 │   └── VnStoryManager/          使用文档与截图
@@ -281,7 +304,7 @@ Packages/com.ale.vnframework/        ← 包根
 ## 📋 待办事项
 - 音频后端未接：`VnStoryAudio` 目前是空实现，需要一套不依赖 `com.fs.gameframework` 的音频管理器。
 - `HAS_TMPRO` / `HAS_LOCALIZATION` 改用 Ale Toolkit 的 `ATK_TMP` / `ATK_LOCALIZATION`，去掉对 Fs 的隐性依赖。
-- 包内欢迎窗口（`Tools → Ale Toolkit → VN Framework → Welcome`）与一键 Demo 向导。
+- 一键 Demo 向导（欢迎窗口已就位，向导尚未做）。
 - `VnActorAnimator` 等公共接口的 API 文档。
 - 样例资源的地址前缀改为随样例自动适配，免去手工订正。
 

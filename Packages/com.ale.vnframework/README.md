@@ -121,9 +121,17 @@ string[] names = VnStoryManager.Instance.GetAllConversationName();
 按**通道**播放 / 停止（承载 BGM），按 **Key** 播放 / 停止（承载环境音、音效、语音）。
 
 > ⚠️ **该文件整体包在 `VNS_FS_GAMEFRAMEWORK` 宏内，宏默认关闭，此时四个接口是空操作、剧情全程无声。**
-> 开启需要 `com.fs.gameframework`，并自行在 `Runtime/Ale.VnFramework.asmdef` 的 `references` 补上
-> `Fs.GameFramework.Common.AudioSystem`——本包默认不引用它，以免没装 Fs 的使用者每次域重载
-> 都吃一条未解析引用警告。
+
+开关在**欢迎窗口**的「插件支持（编译宏）」里（`Tools → Ale Toolkit → VN Framework → Welcome`），
+勾选即接入 Fs GameFramework 的 `AudioManager`：BGM 按通道播放（同通道交叉淡入淡出），
+环境音 / 音效 / 语音按 Key 播放。程序集引用（`Fs.GameFramework.Common.AudioSystem` 与
+`Fs.Utility`）已常驻在 `Runtime/Ale.VnFramework.asmdef` 里，**无需手工添加**——
+Unity 对按名字解析不到的 asmdef 引用是静默跳过的，没装 Fs 的工程不会因此收到任何警告。
+
+> 开启后还需要在 Fs 的音频系统里配置好 `AudioLibrary`，否则会逐条报
+> `AudioEntry with key '...' not found` 且依然没有声音——宏只负责接通调用链，音频资产要自行准备。
+
+要换成别的音频后端，只需改 `VnStoryAudio.cs` 这一个文件：包内没有任何其他地方直接引用音频类型。
 
 ### 对外扩展点
 
@@ -186,6 +194,13 @@ com.ale.vnframework/
 │   ├── VnActorAnimator.cs       角色动画对接层（→ AnimatorBase，就绪门控）
 │   ├── VnResponseButton.cs      分支选项按钮（已读 / 未读态）
 │   └── VnStoryAudio.cs          音频接缝（宏关闭时为空实现）
+├── Editor/                      欢迎窗口与编译宏开关
+│   ├── Ale.VnFramework.Editor.asmdef
+│   ├── VnFrameworkWelcomeWindow.cs   前置条件自检 + 插件支持（编译宏）+ 文档入口
+│   ├── VnFrameworkDefines.cs         VNS_FS_GAMEFRAMEWORK 宏名与依赖探测
+│   ├── VnFrameworkDefineChecker.cs   启动时按需弹窗（只提示，绝不自动改写宏）
+│   ├── VnFrameworkEditorPrefs.cs     EditorPrefs / SessionState 键
+│   └── L10n/                         编辑器界面的英 / 日译表
 ├── Docs~/                       Unity 不导入（~ 后缀）
 │   ├── Setup/PixelCrushers/     ⚠ Dialogue System 的 asmdef 副本与说明
 │   └── VnStoryManager/          使用文档、截图与演示视频
