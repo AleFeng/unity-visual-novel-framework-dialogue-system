@@ -149,11 +149,13 @@ https://github.com/AleFeng/unity-visual-novel-framework-dialogue-system.git?path
 （剧情库 `StoryDatabase` + 管理器与播放器预制体 + Spine 角色与特效资源 + 对话 UI + 示例场景），
 可直接进 Play 体验完整演出流程。
 
-> 样例会落到 `Assets/Samples/Ale VN Framework/1.0.0/VN Framework Demo/`，`VnStoryManager` 上的四个资源
-> 文件夹路径默认值已指向该路径，**导入后无需订正**。
+> ⚠️ **启用了 `ATK_ADDRESSABLE` 时需要做一步登记**：把导入后的 `VN Framework Demo` 文件夹拖进
+> Addressables 分组，并把该条目的 **Address 改成 `VNFrameworkDemo`**。
+> `VnStoryManager` 上的四个资源前缀（`VNFrameworkDemo/Assets/Actors/` 等）就是按这个短地址写的。
 >
-> ⚠️ 启用了 `ATK_ADDRESSABLE` 时，还需要把导入后的样例文件夹（或其任一上级目录）拖进 Addressables 分组，
-> 否则资源加载不到——地址即完整资产路径，与上述前缀一致。未启用该宏时资源改由 `Resources` 解析。
+> 自 1.1.0 起改用这种**固定短地址**，而不是完整资产路径——后者会随包版本号变化
+> （样例落地路径是 `Assets/Samples/{包名}/{版本}/…`），每次发版都得重改一遍前缀。
+> 未启用该宏时资源改由 `Resources` 解析，与本条无关。
 
 ### 其他方式
 也可以下载仓库，把 `Packages/com.ale.vnframework` 整个文件夹拷进你项目的 **`Packages/` 目录**

@@ -9,6 +9,75 @@
 > `PixelCrushers.DialogueSystem.VnStoryFramework` → `Ale.VnFramework`。脚本 `.meta` 的 GUID 全部保留，
 > 既有场景与预制体的组件引用不受影响。**升级前请先读下方「⚠ 前置条件」。**
 
+## [1.1.0] - 2026-08-14
+
+把两个宏归一到 Ale Toolkit，并修掉一个会让资源地址「永久失效」的缓存缺陷。
+**功能与 API 无破坏性变更**——除非你的工程正靠 `com.fs.gameframework` 定义的
+`HAS_TMPRO` / `HAS_LOCALIZATION` 来开启本包的对应路径（见「升级指引」）。
+
+### 变更
+
+- **不再使用 `HAS_TMPRO`，该宏被整个删除**（不是改名）。它此前只门控 `VnResponseButton.stateTxtArray`
+  一个字段，而该字段唯一的用途是 `ToolkitTween.TintGraphic` 染色——包内**从未读写过 `.text`**。
+  字段类型放宽为 `Graphic[]`（`TextMeshProUGUI` 与 `UnityEngine.UI.Text` 都派生自它），
+  TMP 装没装都能用，无需编译宏。**已实测既有预制体的序列化引用不丢失**（「收窄 → 放宽」）。
+- **`HAS_LOCALIZATION` → `ATK_LOCALIZATION`**（4 处，仅 `VnStoryManager`）。纯改名，
+  包内只用到 `Locale` 与 `LocalizationSettings` 两个类型，无 API 变化。
+- **打字机组件改用基类 `AbstractTypewriterEffect`**（原为 `TextMeshProTypewriterEffect`）。
+  该处本就裸露在宏外：未装 TextMeshPro 时面板挂的是 `UnityUITypewriterEffect`，
+  取具体子类会漏掉它、**打字机调速静默失效**。改用基类后两种实现都能收集与调速。
+- 至此包内**再无 TextMeshPro 专属类型**；`ATK_ADDRESSABLE`（8 处）本就正确，未改动；
+  `ATK_INPUT_SYSTEM` 无事可做——全包对输入系统零引用。
+- **样例资源改用固定短地址 `VNFrameworkDemo/…`，不再用完整资产路径。**
+  完整路径里含包版本号（样例落地于 `Assets/Samples/{包名}/{版本}/…`），本次升到 1.1.0 就会让
+  1.0.0 时写死的四个前缀全部失效、使用者导入样例后资源全部加载不到。
+  现在 Addressables 文件夹条目挂在 `VN Framework Demo` 文件夹本身、地址取固定名 `VNFrameworkDemo`，
+  四个前缀相应变为 `VNFrameworkDemo/Assets/{ActorsHead,Backgrounds,Actors,Effects}/`，
+  **与版本号和样例落地路径彻底解耦，此后发版不必再改**。
+  ⚠️ 使用者登记 Addressables 条目时，需把该条目的 Address 改成 `VNFrameworkDemo`。
+
+### 修复
+
+- **`LoadAsset` 会把加载失败的 `null` 写进缓存**，导致该地址被永久毒化：
+  `Dictionary` 存了 `null` 值后 `TryGetValue` 仍返回 `true`，于是此后同一地址的每次请求都命中缓存、
+  直接回传 `null` 并 `return`，**再也不会真正发起加载**；每次命中还会累加已加载计数，
+  进而在卸载时对一个从未持有过句柄的地址调用 `ReleaseAddress`。
+  现改为：失败不入缓存、不计数、不释放，但仍回调 `null` 让调用方走自己的失败分支。
+- **缓存命中处增加 Unity 语义判活**：已销毁的对象在托管层仍是有效引用、但 `==` 判定为 null
+  （所谓「假 null」），此前同样会造成永久毒化。现在死条目视为未命中，清理后重新加载。
+- **待卸载路径仅在确实加载成功时才 `ReleaseAddress`**，避免对未持有的句柄空放。
+- `OnSelectedLocaleChanged` 增加 `SelectedLocale` 空值守卫。可用语言表为空或 Localization
+  尚未初始化完成时它会是 `null`（编辑模式下实测如此），原代码取 `.Identifier.Code` 会抛 NRE。
+  优先使用事件传入的 `locale`，取不到语言代码则维持 Dialogue System 现状。签名保持不变。
+- 修正错位的打字机告警：真正「没找到打字机组件」的分支原本不打日志，而该文案却挂在
+  「字幕文本组件为空」的分支上。两条均已归位并带上面板名。
+- 修正使用文档中失效的资源导入链接（原指向 Fs 的私有仓库）与 `#字段条目名称` 的锚点错配。
+
+### 文档
+
+- 使用文档新增 **「多语言的导出与导入」** 小节：说明 Dialogue System 自带的
+  `Database → Localization Export/Import` 流程——语言列表与 `Find Languages`、额外字段、四个开关、
+  按语言生成 `Actors_` / `Dialogue_` / `Quests_` / `Items_` 四组 CSV、以及编码是**带 BOM 的 UTF-8**
+  （Excel 双击直接打开不乱码）。**逐个节点手工填多语言文本效率很低，这才是推荐做法。**
+- 订正包内 README 的多语言表述：Unity Localization 只提供**语言代码**，取值由 Dialogue System 自己完成，
+  且只作用于它自己的字段——对白按**裸语言代码**、其余按「标题 + 空格 + 语言代码」；
+  本框架的演出字段（`Background`、`Actor1Prefab` 等）不参与多语言。
+
+### 升级指引
+
+- 若你的工程此前**依赖 `com.fs.gameframework` 定义的 `HAS_LOCALIZATION`** 来开启多语言路径，
+  升级后请改在 **Ale Toolkit 欢迎窗口**（`Tools > Ale Toolkit > Welcome`）勾选 `ATK_LOCALIZATION`。
+- `HAS_TMPRO` 无需任何替代——该路径已不再需要编译宏。
+- 若你在自有代码里覆写过 `VnResponseButton`，注意 `stateTxtArray` 的类型已由
+  `TextMeshProUGUI[]` / `Text[]` 变为 `Graphic[]`。
+
+### 已知限制
+
+- **`com.ale.toolkit` 的 `AddressableManager` 存在同类缺陷，位于本包下一层**：加载失败的条目会以
+  `Done = true, Result = null` 长驻其静态表，此后同地址的请求都被它直接短路回 `null`，
+  **不再真正重发 Addressables 请求、也不再报警告**。本包侧的毒化已在本版本修掉
+  （不再缓存 null、不再污染引用计数），但**端到端的重试仍受该层影响**，需在 toolkit 侧一并修复。
+
 ## [1.0.0] - 2026-08-13
 
 首个以 UPM 包形式发布的版本。**功能本身与迁移前一致，本条目是对现有能力的一次完整登记**，
@@ -89,14 +158,14 @@ Dialogue System 默认没有 asmdef、其代码正落在 `Assembly-CSharp` 里�
 
 ### 已知限制
 
-- **`HAS_TMPRO` / `HAS_LOCALIZATION` 由 `com.fs.gameframework` 维护**，不是本包也不是 Ale Toolkit 维护的。
+- ~~**`HAS_TMPRO` / `HAS_LOCALIZATION` 由 `com.fs.gameframework` 维护**，不是本包也不是 Ale Toolkit 维护的。
   没装 Fs 的工程里这两个宏不会被自动定义，TextMeshPro 与 Unity Localization 的代码路径会静默关闭——
   即使 `Ale.VnFramework.asmdef` 已经引用了 `Unity.TextMeshPro` / `Unity.Localization`。
   临时办法是在 Project Settings 手工添加；后续版本考虑改用 Ale Toolkit 的 `ATK_TMP` / `ATK_LOCALIZATION`
-  （二者在本仓库中同时定义，故本仓库无感）。
+  （二者在本仓库中同时定义，故本仓库无感）。~~ **（已在 1.1.0 解决）**
 - **默认不接任何音频后端**：`VnStoryAudio.Backend` 默认为 `NullVnAudioBackend`，
   四个播放 / 停止接口是空操作，剧情全程无声。接入自己的音频系统见 README「音频接缝」；
   内置的 Fs 后端还需在 Fs 的音频系统中配置好 `AudioLibrary` 才会真正出声。
 - **启用 `ATK_ADDRESSABLE` 时，导入后的样例文件夹需自行加入 Addressables 分组**。
-  地址前缀本身已对齐样例落地路径、无需订正，但本包无法替使用者写入其工程的 Addressables 配置。
+  本包无法替使用者写入其工程的 Addressables 配置。（1.1.0 起条目地址改用固定短名 `VNFrameworkDemo`。）
 - **暂无一键 Demo 向导**（欢迎窗口已就位）。
