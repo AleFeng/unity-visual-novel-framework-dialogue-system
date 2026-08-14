@@ -318,7 +318,7 @@ namespace Ale.VnFramework
             }
             
             // 计算过渡时间
-            float duration = (targetPos - transform.position).magnitude / (m_ActorPosSpeed * speedRate);
+            float duration = SafeDuration((targetPos - transform.position).magnitude, m_ActorPosSpeed, speedRate);
             // 位置。平滑过渡
             ToolkitTween.MoveTransform(transform, targetPos, duration, m_ActorPosEase, unscaled: false);
         }
@@ -341,7 +341,7 @@ namespace Ale.VnFramework
             
             // 计算过渡时间
             float angleDiff = Quaternion.Angle(Quaternion.Euler(transform.eulerAngles), Quaternion.Euler(targetRot));
-            float duration = angleDiff / (m_ActorRotateSpeed * speedRate);
+            float duration = SafeDuration(angleDiff, m_ActorRotateSpeed, speedRate);
             // 旋转。平滑过渡。逐轴走最短弧，与上面按 Quaternion.Angle 算出的时长一致
             ToolkitTween.RotateTransform(transform, targetRot, duration, m_ActorRotateEase, unscaled: false);
         }
@@ -363,9 +363,28 @@ namespace Ale.VnFramework
             }
             
             // 计算过渡时间
-            float duration = (targetScale - transform.localScale).magnitude / (m_ActorScaleSpeed * speedRate);
+            float duration = SafeDuration((targetScale - transform.localScale).magnitude, m_ActorScaleSpeed, speedRate);
             // 缩放。平滑过渡
             ToolkitTween.ScaleTransform(transform, targetScale, duration, m_ActorScaleEase, unscaled: false);
+        }
+
+        /// <summary>
+        /// 由「距离 ÷ 速度」算补间时长，并挡住两种会污染 Transform 的取值。
+        ///
+        /// <para>分母为 0 时得 <c>Infinity</c>——补间永远走不完，角色卡在半路；
+        /// 已经在目标点时得 <c>0f / 0f = NaN</c>，而 <c>ToolkitTween</c> 只挡 <c>duration &lt;= 0f</c>，
+        /// 而 <c>NaN &lt;= 0</c> 为 <c>false</c>，于是 NaN 会一路写进 <c>transform</c>，把整条子层级污染成 NaN。</para>
+        ///
+        /// <para>速度字段没有 <c>[Min]</c> 约束，<paramref name="speedRate"/> 又直接来自剧本配置，
+        /// 两者都可能是 0 或负数，故在这里统一兜底：算不出有限的正时长就返回 0，让补间退化为瞬置。</para>
+        /// </summary>
+        private static float SafeDuration(float distance, float speed, float speedRate)
+        {
+            float denominator = speed * speedRate;
+            if (denominator <= 0f) return 0f;
+
+            float duration = distance / denominator;
+            return float.IsNaN(duration) || float.IsInfinity(duration) ? 0f : duration;
         }
         #endregion
         

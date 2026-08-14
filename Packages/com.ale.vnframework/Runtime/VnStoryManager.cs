@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using UnityEngine;
 using UnityEngine.UI;
 using Ale.Toolkit.Runtime;
@@ -602,7 +603,9 @@ namespace Ale.VnFramework
             var dialogueTypewriterSpeed = Field.LookupValue(subtitle.dialogueEntry.fields, dialogueTypewriterSpeedFieldTitle);
             if (!string.IsNullOrEmpty(dialogueTypewriterSpeed))
             {
-                if (float.TryParse(dialogueTypewriterSpeed, out var speed) && speed > 0f)
+                var speed = -1f;
+                ParseFloat(dialogueTypewriterSpeed, ref speed);
+                if (speed > 0f)
                 {
                     // 设置 打字机速度
                     SetAllTypewritersSpeed(speed);
@@ -1792,8 +1795,10 @@ namespace Ale.VnFramework
             ))
             {
                 // 默认参数
-                volume = volume <= 0f ? 1f : volume; // 音量 默认 1.0f
-                pitch = pitch <= 0f ? 1f : pitch; // 音调 默认 1.0f。影响 播放速度 和 音高。
+                // 判据是 < 0 而不是 <= 0：解析器的「没配」哨兵是 -1，0 是一个合法取值。
+                // 用 <= 0 的话「音量 0」（本意静音）会被当成没配、反而放成满音量；负音调（倒放）也表达不出来。
+                volume = volume < 0f ? 1f : volume; // 音量 默认 1.0f
+                pitch = Mathf.Approximately(pitch, -1f) ? 1f : pitch; // 音调 默认 1.0f。影响 播放速度 和 音高。
                 // 延迟播放
                 if (delay > 0f)
                 {
@@ -1883,8 +1888,10 @@ namespace Ale.VnFramework
             ))
             {
                 // 默认参数
-                volume = volume <= 0f ? 1f : volume; // 音量 默认 1.0f
-                pitch = pitch <= 0f ? 1f : pitch; // 音调 默认 1.0f。影响 播放速度 和 音高。
+                // 判据是 < 0 而不是 <= 0：解析器的「没配」哨兵是 -1，0 是一个合法取值。
+                // 用 <= 0 的话「音量 0」（本意静音）会被当成没配、反而放成满音量；负音调（倒放）也表达不出来。
+                volume = volume < 0f ? 1f : volume; // 音量 默认 1.0f
+                pitch = Mathf.Approximately(pitch, -1f) ? 1f : pitch; // 音调 默认 1.0f。影响 播放速度 和 音高。
                 // 延迟播放
                 if (delay > 0f)
                 {
@@ -2004,18 +2011,36 @@ namespace Ale.VnFramework
         #endregion
         
         #region 字符串参数解析
+
+        /// <summary>
+        /// 解析剧本里的一个数值。所有数值参数都必须经过这里。
+        ///
+        /// <para><b>不变文化</b>：剧本里的数字是<b>数据</b>而不是界面文本，绝不能跟随运行机器的区域设置。
+        /// 用不带 <c>IFormatProvider</c> 的重载时，逗号小数点区域（de / fr / ru / es / pt-BR 等）下
+        /// <c>"1.5"</c> 会解析失败——角色瞬移到原点、缩放塌成 0、延迟消失，而且不报任何错。
+        /// Pixel Crushers 自己也是这么处理的（见其 <c>ConversationView</c>）。</para>
+        ///
+        /// <para><b>失败时不改写</b>：<c>float.TryParse</c> 失败会把 out 参数写成 0，
+        /// 那会冲掉调用方预先设好的默认值（哨兵 -1）。故这里用 <c>ref</c>，只在解析成功时才赋值。</para>
+        /// </summary>
+        private static void ParseFloat(string text, ref float value)
+        {
+            if (float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
+                value = parsed;
+        }
+
         /// <summary>
         /// 解析字符串为字符串数组。
         /// </summary>
         /// <param name="arrayString"></param>
         /// <param name="values"></param>
         /// <returns></returns>
-        private void ParseStringArray(string arrayString, out string[] values)
+        private static void ParseStringArray(string arrayString, out string[] values)
         {
             values = Array.Empty<string>();
             if (string.IsNullOrEmpty(arrayString)) return;
 
-            // 使用,或者，进行分割
+            // 按 | 分割
             values = arrayString.Split('|', StringSplitOptions.RemoveEmptyEntries);
         }
 
@@ -2027,19 +2052,19 @@ namespace Ale.VnFramework
         /// <param name="outFloat"></param>
         /// <param name="defaultFloat"></param>
         /// <returns></returns>
-        private void ParseStringAndFloat(string paramString, out string outString, out float outFloat,
+        private static void ParseStringAndFloat(string paramString, out string outString, out float outFloat,
             float defaultFloat = -1f)
         {
             outString = null;
             outFloat = defaultFloat;
             if (string.IsNullOrEmpty(paramString)) return;
 
-            // 使用,或者，进行分割
+            // 按 | 分割
             var values = paramString.Split('|', StringSplitOptions.RemoveEmptyEntries);
             if (values.Length >= 2)
             {
                 outString = values[0];
-                float.TryParse(values[1], out outFloat);
+                ParseFloat(values[1], ref outFloat);
             }
             else if (values.Length == 1)
             {
@@ -2056,36 +2081,36 @@ namespace Ale.VnFramework
         /// <param name="defaultVec3">默认 Vector3值</param>
         /// <param name="defaultFloat"></param>
         /// <returns></returns>
-        private void ParseVector3AndFloat(string paramString, out Vector3 outVector3, out float outFloat,
+        private static void ParseVector3AndFloat(string paramString, out Vector3 outVector3, out float outFloat,
             Vector3 defaultVec3, float defaultFloat = -1f)
         {
             outVector3 = defaultVec3;
             outFloat = defaultFloat;
             if (string.IsNullOrEmpty(paramString)) return;
 
-            // 使用,或者，进行分割
+            // 按 | 分割
             var values = paramString.Split('|', StringSplitOptions.RemoveEmptyEntries);
             if (values.Length >= 4)
             {
-                float.TryParse(values[0], out outVector3.x);
-                float.TryParse(values[1], out outVector3.y);
-                float.TryParse(values[2], out outVector3.z);
-                float.TryParse(values[3], out outFloat);
+                ParseFloat(values[0], ref outVector3.x);
+                ParseFloat(values[1], ref outVector3.y);
+                ParseFloat(values[2], ref outVector3.z);
+                ParseFloat(values[3], ref outFloat);
             }
             else if (values.Length == 3)
             {
-                float.TryParse(values[0], out outVector3.x);
-                float.TryParse(values[1], out outVector3.y);
-                float.TryParse(values[2], out outVector3.z);
+                ParseFloat(values[0], ref outVector3.x);
+                ParseFloat(values[1], ref outVector3.y);
+                ParseFloat(values[2], ref outVector3.z);
             }
             else if (values.Length == 2)
             {
-                float.TryParse(values[0], out outVector3.x);
-                float.TryParse(values[1], out outVector3.y);
+                ParseFloat(values[0], ref outVector3.x);
+                ParseFloat(values[1], ref outVector3.y);
             }
             else if (values.Length == 1)
             {
-                float.TryParse(values[0], out outVector3.x);
+                ParseFloat(values[0], ref outVector3.x);
             }
         }
         
@@ -2098,35 +2123,36 @@ namespace Ale.VnFramework
         /// <param name="outFloat2"></param>
         /// <param name="outFloat3"></param>
         /// <returns></returns>
-        private bool ParseStringAndThreeFloat(string paramString, out string outString, out float outFloat1, out float outFloat2, out float outFloat3)
+        private static bool ParseStringAndThreeFloat(string paramString, out string outString, out float outFloat1, out float outFloat2, out float outFloat3)
         {
             outString = null;
+            // 哨兵 -1：调用方据此区分「没配」与「配了 0」。解析失败时 ParseFloat 不改写，哨兵得以保留。
             outFloat1 = -1f;
             outFloat2 = -1f;
             outFloat3 = -1f;
             if (string.IsNullOrEmpty(paramString)) return false;
-            
-            // 使用,或者，进行分割
+
+            // 按 | 分割
             var values = paramString.Split('|', StringSplitOptions.RemoveEmptyEntries);
             if (values.Length >= 4)
             {
                 outString = values[0];
-                float.TryParse(values[1], out outFloat1);
-                float.TryParse(values[2], out outFloat2);
-                float.TryParse(values[3], out outFloat3);
+                ParseFloat(values[1], ref outFloat1);
+                ParseFloat(values[2], ref outFloat2);
+                ParseFloat(values[3], ref outFloat3);
                 return true;
             }
             else if (values.Length == 3)
             {
                 outString = values[0];
-                float.TryParse(values[1], out outFloat1);
-                float.TryParse(values[2], out outFloat2);
+                ParseFloat(values[1], ref outFloat1);
+                ParseFloat(values[2], ref outFloat2);
                 return true;
             }
             else if (values.Length == 2)
             {
                 outString = values[0];
-                float.TryParse(values[1], out outFloat1);
+                ParseFloat(values[1], ref outFloat1);
                 return true;
             }
             else if (values.Length == 1)
