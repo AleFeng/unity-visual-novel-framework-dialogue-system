@@ -358,7 +358,49 @@ namespace Ale.VnFramework
         private readonly Dictionary<string, UnityEngine.Object> _dicLoadedAssets = new Dictionary<string, UnityEngine.Object>();
         // 加载中的资源 请求卸载的计数器（加载完成后应立即卸载的次数）。
         private readonly Dictionary<string, int> _dicPendingUnloadAfterLoad = new Dictionary<string, int>();
-        
+        // 由本类在运行时 Sprite.Create 出来的 Sprite（地址解析到的是 Texture2D 而非 Sprite 时才有）。
+        // 这种 Sprite 不属于 Addressables，UnloadAsset 释放的只是它背后的纹理句柄，它自己必须显式 Destroy，
+        // 否则每换一次头像 / 背景就漏一个。以地址为键，生命周期便与纹理严格对齐——
+        // 尤其是背景交叉淡入淡出期间旧图仍在 srBackgroundLast 上显示，早一步销毁会让淡出的那张凭空消失。
+        private readonly Dictionary<string, Sprite> _dicRuntimeCreatedSprites = new Dictionary<string, Sprite>();
+
+        /// <summary>
+        /// 把地址解析到的 <see cref="Texture2D"/> 包成 <see cref="Sprite"/> 并登记，供 <see cref="UnloadAsset"/> 回收。
+        /// 资源本身就是 Sprite 时直接返回，不登记也无需回收。
+        /// </summary>
+        private Sprite ResolveSprite(UnityEngine.Object asset, string assetAddress)
+        {
+            var sprite = asset as Sprite;
+            if (sprite) return sprite;
+
+            var texture = asset as Texture2D;
+            if (!texture) return null;
+
+            // pivot 是「相对 rect 归一化」的，不是像素坐标：中心点恒为 (0.5, 0.5)。
+            // 背景那一路曾误传 (width * 0.5f, height * 0.5f)，等于把轴心推到上千个 rect 之外。
+            sprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), new Vector2(0.5f, 0.5f));
+            sprite.name = texture.name;
+
+            if (!string.IsNullOrEmpty(assetAddress))
+            {
+                // 同地址重复创建时先回收上一个，避免登记表里的旧值被覆盖后再也够不着。
+                if (_dicRuntimeCreatedSprites.TryGetValue(assetAddress, out var previous) && previous)
+                    Destroy(previous);
+                _dicRuntimeCreatedSprites[assetAddress] = sprite;
+            }
+            return sprite;
+        }
+
+        /// <summary>销毁并注销某地址上由本类创建的 Sprite。地址没有登记过时是空操作。</summary>
+        private void DestroyRuntimeCreatedSprite(string assetAddress)
+        {
+            if (string.IsNullOrEmpty(assetAddress)) return;
+            if (!_dicRuntimeCreatedSprites.TryGetValue(assetAddress, out var sprite)) return;
+
+            _dicRuntimeCreatedSprites.Remove(assetAddress);
+            if (sprite) Destroy(sprite);
+        }
+
         /// <summary>
         /// 加载资源。委派给 <see cref="ToolkitAssets"/>：启用 ATK_ADDRESSABLE 时走 Addressables 异步加载，
         /// 否则回退 Resources（同步）。本方法在其之上做引用计数与「加载中被请求卸载」的簿记。
@@ -467,6 +509,8 @@ namespace Ale.VnFramework
                 if (_dicLoadedAssetCounter[assetAddress] <= 0)
                 {
                     _dicLoadedAssetCounter.Remove(assetAddress);
+                    // 先销毁本类为该地址创建的 Sprite，再放纹理句柄——顺序反了会留下一个指向已释放纹理的 Sprite
+                    DestroyRuntimeCreatedSprite(assetAddress);
                     // 卸载资源
                     ToolkitAssets.ReleaseAddress(assetAddress);
                     // 从已加载资源表中移除
@@ -690,16 +734,13 @@ namespace Ale.VnFramework
             LoadAsset<UnityEngine.Object>(_dialogueHeadAssetName, (asset) =>
             {
                 // 处理Sprite或Texture2D两种情况
-                var sprite = asset as Sprite;
-                if (!sprite && asset is Texture2D)
-                {
-                    var texture = asset as Texture2D;
-                    sprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), new Vector2(0.5f, 0.5f));
-                    sprite.name = texture.name;
-                }
+                var sprite = ResolveSprite(asset, _dialogueHeadAssetName);
                 if (!sprite)
                 {
                     Debug.LogWarning($"剧情演出 >> 无法加载对话头像 '{_dialogueHeadAssetName}'。请检查名称是否正确。");
+                    // 失败也要卸载上一个头像：此处一度直接 return，把下面那段跳过去了，
+                    // 而下一次切头像会覆写 _dialogueHeadAssetNameLast，那个地址的句柄就再也放不掉。
+                    UnloadLastDialogueHeadImage();
                     return;
                 }
 
@@ -707,14 +748,19 @@ namespace Ale.VnFramework
                 DialogueManager.instance.SetActorPortraitSprite(actorName, sprite);
 
                 // 卸载 上一个头像图片
-                if (!string.IsNullOrEmpty(_dialogueHeadAssetNameLast))
-                {
-                    UnloadAsset(_dialogueHeadAssetNameLast);
-                    _dialogueHeadAssetNameLast = null;
-                }
+                UnloadLastDialogueHeadImage();
             });
         }
         
+        /// <summary>卸载 上一个头像图片。加载成功与失败两条路径都必须走到，否则该地址的句柄会漏掉。</summary>
+        private void UnloadLastDialogueHeadImage()
+        {
+            if (string.IsNullOrEmpty(_dialogueHeadAssetNameLast)) return;
+
+            UnloadAsset(_dialogueHeadAssetNameLast);
+            _dialogueHeadAssetNameLast = null;
+        }
+
         /// <summary>
         /// 清除所有 对话 头像图像
         /// </summary>
@@ -722,11 +768,7 @@ namespace Ale.VnFramework
         private void ClearAllDialogueHeadImage()
         {
             // 立刻卸载 上一个头像图片
-            if (!string.IsNullOrEmpty(_dialogueHeadAssetNameLast))
-            {
-                UnloadAsset(_dialogueHeadAssetNameLast);
-                _dialogueHeadAssetNameLast = null;
-            }
+            UnloadLastDialogueHeadImage();
             // 卸载 当前头像图片
             if (!string.IsNullOrEmpty(_dialogueHeadAssetName))
             {
@@ -761,6 +803,27 @@ namespace Ale.VnFramework
         private bool _isBackgroundFadeIn; // 当前背景是否是淡入状态
         // 清除所有背景图像的 延时句柄。值类型，无效句柄为 default。
         private ToolkitTweenHandle _tweenClearAllBackground;
+        // 最近一次启动的背景切换协程。用于「启动新的之前先停掉上一条」——同一时刻多条协程
+        // 会争写同一组渲染器。可能指向一条已结束的协程，对其 StopCoroutine 是空操作，无妨。
+        private Coroutine _backgroundCoroutine;
+
+        /// <summary>停掉在途的背景切换协程。其 finally 会顺带卸载上一张背景。</summary>
+        private void StopBackgroundCoroutine()
+        {
+            if (_backgroundCoroutine == null) return;
+
+            StopCoroutine(_backgroundCoroutine);
+            _backgroundCoroutine = null;
+        }
+
+        /// <summary>卸载 上一张背景图像。正常结束与提前退出两类路径都必须走到。</summary>
+        private void UnloadLastBackground()
+        {
+            if (string.IsNullOrEmpty(_backgroundAssetNameLast)) return;
+
+            UnloadAsset(_backgroundAssetNameLast);
+            _backgroundAssetNameLast = null;
+        }
         
         /// <summary>
         /// 初始化 背景
@@ -842,7 +905,11 @@ namespace Ale.VnFramework
         private void ClearAllBackground()
         {
             float delay = backgroundFadeDuration;
-            
+
+            // 先停掉在途的切换协程：否则它会在这里清完之后继续跑，
+            // 把刚隐藏的渲染器重新激活、重新贴图，背景「自己又亮回来」。
+            StopBackgroundCoroutine();
+
             // 淡出背景图像
             if (srBackgroundCurrent)
             {
@@ -857,8 +924,7 @@ namespace Ale.VnFramework
             _tweenClearAllBackground = ToolkitTween.DelayedCall(delay, () =>
             {
                 // 卸载背景图像资源
-                UnloadAsset(_backgroundAssetNameLast);
-                _backgroundAssetNameLast = null;
+                UnloadLastBackground();
                 UnloadAsset(_backgroundAssetName);
                 _backgroundAssetName = null;
                 // 清空并隐藏背景图像组件
@@ -929,34 +995,46 @@ namespace Ale.VnFramework
             // 日志输出
             Debug.Log($"剧情演出 >> 设置背景图像为 '{_backgroundAssetName}'。");
             
-            // 加载图像资源
-            LoadAsset<Sprite>(_backgroundAssetName, OnBackgroundAssetLoaded);
+            // 加载图像资源。把本次请求的地址一并带进回调：加载是异步的，回来时可能已经不是当前背景了。
+            var requestedAddress = _backgroundAssetName;
+            LoadAsset<Sprite>(requestedAddress, asset => OnBackgroundAssetLoaded(asset, requestedAddress));
         }
-        
+
         /// <summary>
         /// 资源加载完成 背景图像
         /// </summary>
-        /// <param name="asset"></param>
-        private void OnBackgroundAssetLoaded(UnityEngine.Object asset)
+        /// <param name="asset">加载回来的资源。</param>
+        /// <param name="requestedAddress">发起本次加载时的背景地址，用于判断回调是否已经过期。</param>
+        private void OnBackgroundAssetLoaded(UnityEngine.Object asset, string requestedAddress)
         {
-            // 图片类型为Sprite时，直接使用
-            var image = asset as Sprite;
-            // 图片类型为Texture2D时，转换为Sprite
-            if (!image && asset is Texture2D)
+            // 迟到的回调：等待期间又切了别的背景，这一张已经不是当前要显示的了。
+            // 若不拦，赢的会是「最后完成的」而不是「最后请求的」——快进时画面会停在中间某一张。
+            // 它的引用计数在 LoadAsset 里已经加过，这里必须放掉，否则该地址永远留在表里。
+            if (requestedAddress != _backgroundAssetName)
             {
-                var texture = asset as Texture2D;
-                image = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), new Vector2(texture.width * 0.5f, texture.height * 0.5f));
-                image.name = texture.name;
+                UnloadAsset(requestedAddress);
+                return;
             }
-            // 如果图片加载失败，尝试使用Addressables加载
+
+            // Sprite 直接用；是 Texture2D 时包一层。
+            // ⚠️ 后一路目前不可达：加载走的是 LoadAsset<Sprite>，泛型一直传到 Addressables.LoadAssetAsync<Sprite>，
+            // 拿回来的只可能是 Sprite 或 null。这里保留只是防御——但**别为了「激活」它而把加载放宽成 <Object>**：
+            // 那样取到的是纹理主资源，运行时包出的 Sprite 会丢掉导入器的 pixels-per-unit，背景尺寸会跟着变。
+            // （此处一度自行 Sprite.Create 且把 pivot 传成了像素中心，pivot 其实是相对 rect 归一化的，见 ResolveSprite。）
+            var image = ResolveSprite(asset, _backgroundAssetName);
             if (!image)
             {
                 Debug.LogWarning($"剧情演出 >> 无法加载背景图像 '{_backgroundAssetName}'。请检查名称是否正确。");
+                // 失败也要卸载上一张背景，否则下次换背景覆写 _backgroundAssetNameLast 后该句柄再也放不掉。
+                UnloadLastBackground();
                 return;
             }
-            
-            // 启动协程，设置背景图像
-            StartCoroutine(SetBackgroundImageCoroutine(image));
+
+            // 启动协程，设置背景图像。
+            // 存句柄并先停掉在途的那条：跳过 / 快进时（VN 的常态）行推进得比 backgroundFadeDuration 快，
+            // 会叠开多个协程同时写 srBackgroundCurrent.color 与 srBackgroundLast.sprite，最后谁写谁赢。
+            StopBackgroundCoroutine();
+            _backgroundCoroutine = StartCoroutine(SetBackgroundImageCoroutine(image));
         }
         
         /// <summary>
@@ -979,80 +1057,100 @@ namespace Ale.VnFramework
         /// <returns></returns>
         private IEnumerator SetBackgroundImageCoroutine(Sprite image)
         {
-            // 激活 当前背景图像组件
-            if (srBackgroundCurrent.gameObject.activeSelf == false)
-                srBackgroundCurrent.gameObject.SetActive(true);
-            
-            // 淡入淡出时间为0时，直接切换图像
-            if (Mathf.Approximately(0, backgroundFadeDuration))
+            // 整个方法体包在 try/finally 里，只为一件事：无论从哪条路径退出，都必须卸载上一张背景。
+            // 此前卸载写在方法末尾，而下面有两条 yield break 会绕过它（fadeDuration 为 0 的快路径、
+            // 以及「单渲染器 + 无场景切换管理器」的路径）；一旦绕过，下次换背景就会覆写
+            // _backgroundAssetNameLast，那个地址的句柄再也放不掉——fadeDuration 设 0 时每换一次漏一个。
+            // finally 同时覆盖 StopCoroutine：Unity 停协程会 Dispose 迭代器，finally 照常执行。
+            try
             {
-                // 直接设置 当前背景图像
-                srBackgroundCurrent.sprite = image;
-                // 清空并隐藏 上个背景图像
-                if (srBackgroundLast && srBackgroundLast.gameObject.activeSelf)
-                {
-                    srBackgroundLast.sprite = null;
-                    srBackgroundLast.gameObject.SetActive(false);
-                }
-                yield break;
-            }
+                // 渲染器可能没配（其余四处 InitBackground / FadeIn / FadeOut / ClearAll 都做了守卫，唯独这里没有），
+                // 也可能在协程在途时随场景被销毁，而本管理器是 DontDestroyOnLoad 的。
+                if (!srBackgroundCurrent) yield break;
 
-            // 如果只有background Image，使用DialogueManager的场景切换管理器进行切换
-            if (srBackgroundCurrent && !srBackgroundLast)
-            {
-                var sceneTransitionManager = DialogueManager.instance.GetComponentInChildren<StandardSceneTransitionManager>();
-                if (sceneTransitionManager)
+                // 激活 当前背景图像组件
+                if (srBackgroundCurrent.gameObject.activeSelf == false)
+                    srBackgroundCurrent.gameObject.SetActive(true);
+
+                // 淡入淡出时间为0时，直接切换图像
+                if (Mathf.Approximately(0, backgroundFadeDuration))
                 {
-                    // 使用场景切换管理器进行切换
-                    // 离开场景，淡出
-                    sceneTransitionManager.leaveSceneTransition.TriggerAnimation();
-                    // 等待淡出动画完成和额外的淡入淡出时间
-                    yield return new WaitForSeconds(sceneTransitionManager.leaveSceneTransition.animationDuration + backgroundFadeDuration);
-                    // 切换图像
+                    // 直接设置 当前背景图像
                     srBackgroundCurrent.sprite = image;
-                    // 进入场景，淡入
-                    sceneTransitionManager.enterSceneTransition.TriggerAnimation();
-                }
-                else
-                {
-                    // 无场景切换管理器，直接切换图像
-                    srBackgroundCurrent.sprite = image;
+                    // 清空并隐藏 上个背景图像
+                    if (srBackgroundLast && srBackgroundLast.gameObject.activeSelf)
+                    {
+                        srBackgroundLast.sprite = null;
+                        srBackgroundLast.gameObject.SetActive(false);
+                    }
                     yield break;
                 }
-            }
-            // 有两个背景图像时，使用淡入淡出效果切换
-            else if (srBackgroundCurrent && srBackgroundLast)
-            {
-                // BackgroundLast覆盖在BackgroundCurrent上。先激活 BackgroundLast。
-                if (srBackgroundLast.gameObject.activeSelf == false)
-                    srBackgroundLast.gameObject.SetActive(true);
-                // 将旧背景图设置到BackgroundLast。设置为不透明。
-                srBackgroundLast.sprite = srBackgroundCurrent.sprite;
-                srBackgroundLast.color = new Color(1, 1, 1, 1);
-                srBackgroundLast.enabled = true;
-                // 将新背景图设置到BackgroundCurrent。设置为透明。
-                srBackgroundCurrent.sprite = image;
-                srBackgroundCurrent.color = new Color(1, 1, 1, 0);
-                // 淡入淡出效果
-                float elapsed = 0;
-                while (elapsed < backgroundFadeDuration)
+
+                // 如果只有background Image，使用DialogueManager的场景切换管理器进行切换
+                if (srBackgroundCurrent && !srBackgroundLast)
                 {
-                    var t = (elapsed / backgroundFadeDuration);
-                    srBackgroundLast.color = new Color(1, 1, 1, 1 - t);
-                    srBackgroundCurrent.color = new Color(1, 1, 1, t);
-                    yield return null;
-                    elapsed += Time.deltaTime;
+                    var sceneTransitionManager = DialogueManager.instance.GetComponentInChildren<StandardSceneTransitionManager>();
+                    if (sceneTransitionManager)
+                    {
+                        // 使用场景切换管理器进行切换
+                        // 离开场景，淡出
+                        sceneTransitionManager.leaveSceneTransition.TriggerAnimation();
+                        // 等待淡出动画完成和额外的淡入淡出时间
+                        yield return new WaitForSeconds(sceneTransitionManager.leaveSceneTransition.animationDuration + backgroundFadeDuration);
+                        // 跨过 yield 之后渲染器可能已经没了
+                        if (!srBackgroundCurrent) yield break;
+                        // 切换图像
+                        srBackgroundCurrent.sprite = image;
+                        // 进入场景，淡入
+                        sceneTransitionManager.enterSceneTransition.TriggerAnimation();
+                    }
+                    else
+                    {
+                        // 无场景切换管理器，直接切换图像
+                        srBackgroundCurrent.sprite = image;
+                        yield break;
+                    }
                 }
-                // 动画结束后，设置新背景为不透明，隐藏旧背景
-                srBackgroundLast.enabled = false;
-                srBackgroundCurrent.color = new Color(1, 1, 1, 1);
+                // 有两个背景图像时，使用淡入淡出效果切换
+                else if (srBackgroundCurrent && srBackgroundLast)
+                {
+                    // BackgroundLast覆盖在BackgroundCurrent上。先激活 BackgroundLast。
+                    if (srBackgroundLast.gameObject.activeSelf == false)
+                        srBackgroundLast.gameObject.SetActive(true);
+                    // 将旧背景图设置到BackgroundLast。设置为不透明。
+                    srBackgroundLast.sprite = srBackgroundCurrent.sprite;
+                    srBackgroundLast.color = new Color(1, 1, 1, 1);
+                    srBackgroundLast.enabled = true;
+                    // 将新背景图设置到BackgroundCurrent。设置为透明。
+                    srBackgroundCurrent.sprite = image;
+                    srBackgroundCurrent.color = new Color(1, 1, 1, 0);
+                    // 淡入淡出效果
+                    float elapsed = 0;
+                    while (elapsed < backgroundFadeDuration)
+                    {
+                        // 每帧都要判活：本管理器 DontDestroyOnLoad，渲染器却随场景走
+                        if (!srBackgroundCurrent || !srBackgroundLast) yield break;
+                        var t = (elapsed / backgroundFadeDuration);
+                        srBackgroundLast.color = new Color(1, 1, 1, 1 - t);
+                        srBackgroundCurrent.color = new Color(1, 1, 1, t);
+                        yield return null;
+                        elapsed += Time.deltaTime;
+                    }
+                    if (!srBackgroundCurrent || !srBackgroundLast) yield break;
+                    // 动画结束后，设置新背景为不透明，隐藏旧背景
+                    srBackgroundLast.enabled = false;
+                    srBackgroundCurrent.color = new Color(1, 1, 1, 1);
+                }
             }
-            
-            // 卸载上个背景图像资源
-            if (!string.IsNullOrEmpty(_backgroundAssetNameLast))
+            finally
             {
-                UnloadAsset(_backgroundAssetNameLast);
-                _backgroundAssetNameLast = null;
+                // 卸载上个背景图像资源。走到这里的路径包括正常结束、上面每一条 yield break，
+                // 以及外部 StopCoroutine 导致的迭代器 Dispose。
+                //
+                // 注意这里不清 _backgroundCoroutine：fadeDuration 为 0 且加载同步返回时，整条协程会在
+                // StartCoroutine 内部跑完，finally 先于外层那句赋值执行——在这里置空会立刻被覆盖回去。
+                // 字段本就只用于「启动新的之前停掉上一条」，而对已结束的协程调 StopCoroutine 是空操作。
+                UnloadLastBackground();
             }
         }
         #endregion
