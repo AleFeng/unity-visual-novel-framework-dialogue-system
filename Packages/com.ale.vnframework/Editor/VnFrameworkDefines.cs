@@ -21,7 +21,8 @@ namespace Ale.VnFramework.Editor
         public const string PackageFs = "com.fs.gameframework";
 
         // ── 探测用命名空间 ───────────────────────────────────────────────────
-        private const string NsFsAudio = "Fs.GameFramework.Common.AudioSystem";
+        /// <summary>Fs 音频系统的命名空间。也用于一致性告警的文案，故为 public。</summary>
+        public const string NsFsAudio = "Fs.GameFramework.Common.AudioSystem";
 
         /// <summary>宏是否已在 PlayerSettings 中启用。</summary>
         public static bool IsFsGameFrameworkEnabled() => ToolkitDefines.IsDefineEnabled(FsGameFramework);

@@ -1,4 +1,6 @@
 using UnityEditor;
+using UnityEngine;
+using static Ale.Toolkit.Editor.ToolkitEditorL10n;
 
 namespace Ale.VnFramework.Editor
 {
@@ -21,7 +23,29 @@ namespace Ale.VnFramework.Editor
         private static void OnDelayedInit()
         {
             EditorApplication.delayCall -= OnDelayedInit;
+            CheckRuntimeConsistency();
             CheckWelcomeWindow();
+        }
+
+        /// <summary>
+        /// 检查「宏开着，但对应的运行时不在」这种不一致，并给出可读告警。
+        ///
+        /// <para>不修正、只提示——理由同本类的类注释。没有这条的话，使用者拿到的是
+        /// <c>FsVnAudioBackend.cs</c> 里一堆 <c>CS0246: 找不到类型 AudioManager</c>，
+        /// 完全看不出「是我自己勾了个宏」。</para>
+        /// </summary>
+        private static void CheckRuntimeConsistency()
+        {
+            if (!VnFrameworkDefines.IsFsGameFrameworkEnabled()) return;
+            if (VnFrameworkDefines.IsFsGameFrameworkInstalled()) return;
+
+            Debug.LogWarning(Fmt(
+                "[VN Framework] 已启用宏 {0}，但工程中找不到 Fs GameFramework 的音频系统（{1}）。\n" +
+                "FsVnAudioBackend 将无法编译。请安装 {2}，或在欢迎窗口取消勾选 Fs Game Framework" +
+                "（Tools > Ale Toolkit > VN Framework > Welcome）。",
+                VnFrameworkDefines.FsGameFramework,
+                VnFrameworkDefines.NsFsAudio,
+                VnFrameworkDefines.PackageFs));
         }
 
         /// <summary>判断是否需要自动弹出欢迎窗口并弹出。</summary>

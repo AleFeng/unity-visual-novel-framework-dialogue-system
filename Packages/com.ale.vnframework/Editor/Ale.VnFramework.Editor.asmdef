@@ -2,8 +2,6 @@
     "name": "Ale.VnFramework.Editor",
     "rootNamespace": "Ale.VnFramework.Editor",
     "references": [
-        "Ale.VnFramework",
-        "Ale.Toolkit.Runtime",
         "Ale.Toolkit.Editor"
     ],
     "includePlatforms": [

@@ -86,6 +86,30 @@ namespace Ale.VnFramework.Editor
             Add("文档", "Documentation", "ドキュメント");
             Add("查看说明文档", "View README", "README を見る");
             Add("查看使用文档", "View Manual", "使用ドキュメントを見る");
+
+            // 下面两条在本仓库里「看起来正常」，只是因为隔壁 com.ale.inventory / com.ale.animsimulatorsystem
+            // 也检出在同一台机器上、共用 ToolkitEditorL10n 那张全局译表。
+            // 干净工程里只装 toolkit + 本包时它们会回落中文，故必须由本包自己登记。
+            // 注意 toolkit 只登记了写死路径的那条「未能找到文档文件：\nPackages/com.ale.toolkit/README.md」，
+            // 不是这里的 {0} 模板版，两者不是同一个 Key。
+            Add("打开 Ale Toolkit 设置（语言 / 插件宏）",
+                "Open Ale Toolkit Settings (Language / Plugin Macros)",
+                "Ale Toolkit 設定を開く（言語 / プラグインマクロ）");
+            Add("未能找到文档文件：\n{0}",
+                "Documentation file not found:\n{0}",
+                "ドキュメントファイルが見つかりません：\n{0}");
+
+            // ── 宏与运行时的一致性告警（VnFrameworkDefineChecker） ────────────
+            Add("[VN Framework] 已启用宏 {0}，但工程中找不到 Fs GameFramework 的音频系统（{1}）。\n" +
+                "FsVnAudioBackend 将无法编译。请安装 {2}，或在欢迎窗口取消勾选 Fs Game Framework" +
+                "（Tools > Ale Toolkit > VN Framework > Welcome）。",
+                "[VN Framework] Macro {0} is enabled, but the Fs GameFramework audio system ({1}) was not found " +
+                "in this project.\nFsVnAudioBackend will fail to compile. Install {2}, or uncheck Fs Game Framework " +
+                "in the welcome window (Tools > Ale Toolkit > VN Framework > Welcome).",
+                "[VN Framework] マクロ {0} が有効ですが、Fs GameFramework のオーディオシステム（{1}）が" +
+                "見つかりません。\nFsVnAudioBackend はコンパイルできません。{2} をインストールするか、" +
+                "ウェルカムウィンドウで Fs Game Framework のチェックを外してください" +
+                "（Tools > Ale Toolkit > VN Framework > Welcome）。");
         }
     }
 }

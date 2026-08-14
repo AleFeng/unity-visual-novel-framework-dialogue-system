@@ -16,10 +16,14 @@ namespace Ale.VnFramework.Editor
     public class VnFrameworkWelcomeWindow : EditorWindow
     {
         private const string PackageName = "com.ale.vnframework";
-        private const string SetupDocPath = "Packages/" + PackageName + "/Docs~/Setup/PixelCrushers/README.md";
-        private const string ReadmePath = "Packages/" + PackageName + "/README.md";
-        private const string ManualPath = "Packages/" + PackageName + "/Docs~/VnStoryManager/VnStoryManager.md";
-        private const string LogoPath = "Packages/" + PackageName + "/Docs~/Images/VnFramework_Logo.png";
+
+        // 包内相对路径。绝对路径一律经 PackageInfo.resolvedPath 拼出，不要用
+        // Path.GetFullPath("Packages/…")——那是纯 .NET 拼接，只有内嵌包才碰巧成立；
+        // 经 git URL / 仓库安装时包位于 Library/PackageCache/<name>@<hash>/，该路径根本不存在。
+        // 而 Docs~ 带 ~ 后缀、不进 AssetDatabase，也没法用 AssetDatabase 那套 API 解析。
+        private const string SetupDocPath = "Docs~/Setup/PixelCrushers/README.md";
+        private const string ReadmePath = "README.md";
+        private const string ManualPath = "Docs~/VnStoryManager/VnStoryManager.md";
 
         // 打开时的初始高宽；窗口可手动调整（只设 minSize，min==max 会禁止缩放）。
         private static readonly Vector2 WindowSize = new Vector2(560f, 680f);
@@ -32,9 +36,6 @@ namespace Ale.VnFramework.Editor
 
         private bool _fsEnabled;
         private bool _fsInstalled;
-
-        private Texture2D _logoTexture;
-        private bool _logoLoadAttempted;
 
         #region 打开窗口
 
@@ -68,17 +69,6 @@ namespace Ale.VnFramework.Editor
         private void OnEnable()
         {
             _initialized = false;
-            _logoTexture = null;
-            _logoLoadAttempted = false;
-        }
-
-        private void OnDisable()
-        {
-            if (_logoTexture)
-            {
-                DestroyImmediate(_logoTexture);
-                _logoTexture = null;
-            }
         }
 
         // 惰性初始化：EditorStyles 与 PlayerSettings 在域重载期间访问不安全，故不放 OnEnable。
@@ -167,20 +157,9 @@ namespace Ale.VnFramework.Editor
             GUILayout.FlexibleSpace();
 
             EditorGUILayout.Space(20);
-            var logo = GetLogoTexture();
-            if (logo)
-            {
-                const int displaySize = 128;
-                EditorGUILayout.BeginHorizontal();
-                GUILayout.FlexibleSpace();
-                Rect logoRect = GUILayoutUtility.GetRect(
-                    displaySize, displaySize,
-                    GUILayout.Width(displaySize), GUILayout.Height(displaySize));
-                GUI.DrawTexture(logoRect, logo, ScaleMode.ScaleToFit, true);
-                GUILayout.FlexibleSpace();
-                EditorGUILayout.EndHorizontal();
-                EditorGUILayout.Space(6);
-            }
+            // 这里原本还有一段绘制 Logo 的代码，指向 Docs~/Images/VnFramework_Logo.png——
+            // 该目录从来就不存在，取纹理恒为 null，整块从未渲染过任何东西。已删除。
+            // 日后要加 Logo，把图放进 Docs~/Images/ 再按 PackageRoot 拼路径读取即可。
 
             EditorGUILayout.LabelField($"Ale VN Framework  v{Version}", _styleHeader);
             EditorGUILayout.LabelField(Tr("基于 Dialogue System 的视觉小说剧情演出框架"), _styleSub);
@@ -196,9 +175,30 @@ namespace Ale.VnFramework.Editor
 
         #endregion
 
-        #region 版本号
+        #region 包信息
 
-        private static string _version;
+        private static UnityEditor.PackageManager.PackageInfo _packageInfo;
+        private static bool _packageInfoQueried;
+
+        /// <summary>本包的 <c>PackageInfo</c>。查一次即缓存；查不到时为 null。</summary>
+        private static UnityEditor.PackageManager.PackageInfo PackageInfo
+        {
+            get
+            {
+                if (_packageInfoQueried) return _packageInfo;
+                _packageInfoQueried = true;
+                _packageInfo = UnityEditor.PackageManager.PackageInfo.FindForAssembly(
+                    typeof(VnFrameworkWelcomeWindow).Assembly);
+                return _packageInfo;
+            }
+        }
+
+        /// <summary>
+        /// 包在磁盘上的实际根目录。内嵌包是 <c>Packages/com.ale.vnframework</c>，
+        /// 经 git URL / 仓库安装时是 <c>Library/PackageCache/com.ale.vnframework@&lt;hash&gt;</c>。
+        /// 所有包内文件路径都必须从这里拼，不能写死 <c>Packages/…</c>。
+        /// </summary>
+        private static string PackageRoot => PackageInfo != null ? PackageInfo.resolvedPath : null;
 
         /// <summary>
         /// 从 <c>package.json</c> 动态读取，不写死常量——写死的版本号迟早会与包脱节。
@@ -207,11 +207,8 @@ namespace Ale.VnFramework.Editor
         {
             get
             {
-                if (!string.IsNullOrEmpty(_version)) return _version;
-                var pkg = UnityEditor.PackageManager.PackageInfo.FindForAssembly(
-                    typeof(VnFrameworkWelcomeWindow).Assembly);
-                _version = pkg != null && !string.IsNullOrEmpty(pkg.version) ? pkg.version : "?";
-                return _version;
+                var pkg = PackageInfo;
+                return pkg != null && !string.IsNullOrEmpty(pkg.version) ? pkg.version : "?";
             }
         }
 
@@ -373,7 +370,12 @@ namespace Ale.VnFramework.Editor
             if (_pendingRecompile)
             {
                 EditorGUILayout.LabelField(Tr("  ⏳ 宏定义已更改，等待 Unity 重新编译…"), _styleWarn);
-                if (!EditorApplication.isCompiling) _pendingRecompile = false;
+                // 只在 Repaint 事件里清标志。原先是在这个分支里直接清——若 Layout 时为真、
+                // 到 Repaint 已变假，同一次绘制的控件数就对不上，IMGUI 会抛
+                // 「Getting control N's position in a group with only M controls」。
+                // Layout 决定控件数、Repaint 才画，标志必须在两者之间保持不变。
+                if (Event.current.type == EventType.Repaint && !EditorApplication.isCompiling)
+                    _pendingRecompile = false;
             }
 
             EditorGUILayout.EndVertical();
@@ -394,52 +396,30 @@ namespace Ale.VnFramework.Editor
             EditorGUILayout.EndHorizontal();
         }
 
+        /// <summary>
+        /// 打开包内文档。路径按 <see cref="PackageRoot"/> 解析，内嵌包与 PackageCache 安装都成立。
+        /// </summary>
         private static void OpenDoc(string packageRelativePath)
         {
-            string absolutePath = System.IO.Path.GetFullPath(packageRelativePath);
+            string root = PackageRoot;
+            string absolutePath = string.IsNullOrEmpty(root)
+                ? null
+                : System.IO.Path.GetFullPath(System.IO.Path.Combine(root, packageRelativePath));
 
-            if (System.IO.File.Exists(absolutePath))
+            if (!string.IsNullOrEmpty(absolutePath) && System.IO.File.Exists(absolutePath))
             {
                 Application.OpenURL("file:///" + absolutePath.Replace('\\', '/'));
             }
             else
             {
                 EditorUtility.DisplayDialog(Tr("文档未找到"),
-                    Fmt("未能找到文档文件：\n{0}", packageRelativePath), Tr("确定"));
+                    Fmt("未能找到文档文件：\n{0}", absolutePath ?? packageRelativePath), Tr("确定"));
             }
         }
 
         #endregion
 
-        #region Logo 与页脚
-
-        /// <summary>
-        /// <c>FilterMode.Point</c> 让放大时像素边缘保持锐利。结果缓存，避免每帧重复 I/O。
-        /// Logo 不存在时静默跳过绘制（<c>Docs~</c> 不被 AssetDatabase 索引，只能走文件系统读取）。
-        /// </summary>
-        private Texture2D GetLogoTexture()
-        {
-            if (_logoTexture) return _logoTexture;
-            if (_logoLoadAttempted) return null;
-
-            _logoLoadAttempted = true;
-
-            string logoPath = System.IO.Path.GetFullPath(LogoPath);
-            if (!System.IO.File.Exists(logoPath)) return null;
-
-            byte[] bytes = System.IO.File.ReadAllBytes(logoPath);
-            var tex = new Texture2D(64, 64, TextureFormat.RGBA32, false, false)
-            {
-                filterMode = FilterMode.Point,
-                wrapMode = TextureWrapMode.Clamp
-            };
-            if (tex.LoadImage(bytes))
-                _logoTexture = tex;
-            else
-                DestroyImmediate(tex);
-
-            return _logoTexture;
-        }
+        #region 页脚
 
         private void DrawFooter()
         {
