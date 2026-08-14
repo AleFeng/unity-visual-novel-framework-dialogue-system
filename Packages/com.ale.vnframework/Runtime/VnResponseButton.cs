@@ -3,10 +3,6 @@ using UnityEngine.UI;
 using Ale.Toolkit.Runtime;
 using PixelCrushers.DialogueSystem;
 
-#if HAS_TMPRO
-using TMPro;
-#endif
-
 namespace Ale.VnFramework
 {
     /// <summary>
@@ -17,12 +13,11 @@ namespace Ale.VnFramework
     {
         [Tooltip("图片列表：可包含多个图片组件，根据 是否已读的状态 设置图片的颜色。")] [SerializeField]
         private Image[] stateImageArray;
-        [Tooltip("文本列表：可包含多个文本组件，根据 是否已读的状态 设置文本的颜色。")]
-#if HAS_TMPRO
-        [SerializeField] private TextMeshProUGUI[] stateTxtArray;
-#else
-        [SerializeField] private Text[] stateTxtArray;
-#endif
+        // 声明为 Graphic 而非 TMP_Text / Text：本组件只给文本组件染色（见 RefreshReadState），
+        // 从不读写 .text，而 TextMeshProUGUI 与 UnityEngine.UI.Text 都派生自 Graphic。
+        // 如此便无需为「有没有 TextMeshPro」开一个编译宏。
+        [Tooltip("文本列表：可包含多个文本组件，根据 是否已读的状态 设置文本的颜色。TMP 与 UGUI Text 均可。")]
+        [SerializeField] private Graphic[] stateTxtArray;
 
         [Tooltip("未读 提示物体：根据 是否已读的状态 设置提示对象的显示或隐藏。")] 
         [SerializeField] private GameObject isUnReadTip;

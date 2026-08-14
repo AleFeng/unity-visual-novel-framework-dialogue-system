@@ -467,13 +467,18 @@ namespace Ale.VnFramework
                         // 获取 打字机组件
                         if (panel.subtitleText != null && panel.subtitleText.gameObject)
                         {
-                            var typewriter = panel.subtitleText.gameObject.GetComponent<TextMeshProTypewriterEffect>();
+                            // 取基类而非 TextMeshProTypewriterEffect：面板挂的可能是
+                            // UnityUITypewriterEffect（未装 TextMeshPro 时），取具体子类会漏掉它、调速静默失效。
+                            var typewriter = panel.subtitleText.gameObject.GetComponent<AbstractTypewriterEffect>();
                             if (typewriter)
                                 _dialogueTypewriters.Add(typewriter);
+                            else
+                                Debug.LogWarning($"剧情演出 >> 字幕面板 '{panel.name}' 的字幕文本组件上没有打字机组件，无法设置打字机速度。" +
+                                                 $"请在该文本组件上添加 TextMeshPro Typewriter Effect（或 Unity UI Typewriter Effect）。");
                         }
                         else
                         {
-                            Debug.LogWarning($"剧情演出 >> 对话UI的字幕文本组件未找到 TextMeshProTypewriterEffect 组件，无法设置打字机速度。请确保在对话UI的字幕文本组件上添加 TextMeshProTypewriterEffect 组件。");
+                            Debug.LogWarning($"剧情演出 >> 字幕面板 '{panel.name}' 未配置字幕文本组件（subtitleText 为空），无法设置打字机速度。");
                         }
                         // 获取 继续按钮
                         if (panel.continueButton)
@@ -551,8 +556,10 @@ namespace Ale.VnFramework
         [Tooltip("对话-打字机 字符数/秒（默认10）")]
         [SerializeField] private float dialogueTypewriterPerSecond = 10f;
         
-        // 如果你只需要快速访问所有的打字机组件
-        private readonly List<TextMeshProTypewriterEffect> _dialogueTypewriters = new List<TextMeshProTypewriterEffect>();
+        // 如果你只需要快速访问所有的打字机组件。
+        // 用基类装：TextMeshProTypewriterEffect 与 UnityUITypewriterEffect 都派生自它，
+        // charactersPerSecond 也声明在基类上，故两种实现都能被收集与调速。
+        private readonly List<AbstractTypewriterEffect> _dialogueTypewriters = new List<AbstractTypewriterEffect>();
 
         /// <summary>
         /// 设置 打字机的速度
