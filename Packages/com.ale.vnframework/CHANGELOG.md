@@ -9,6 +9,31 @@
 > `PixelCrushers.DialogueSystem.VnStoryFramework` → `Ale.VnFramework`。脚本 `.meta` 的 GUID 全部保留，
 > 既有场景与预制体的组件引用不受影响。**升级前请先读下方「⚠ 前置条件」。**
 
+## [1.5.1] - 2026-08-15
+
+只动样例与元数据的收尾发布。**`Runtime/` 下没有任何 `.cs` 改动**——公开 API、序列化字段与
+运行时行为与 1.5.0 逐字一致，升级不需要改代码，也不会影响既有场景与存档。
+
+### 修复
+
+- **还原 6 个被误重新生成的 `.meta` GUID**：`README.md`、`Runtime/` 目录，以及
+  `VnActorAnimator.cs` / `VnResponseButton.cs` / `VnStoryManager.cs` / `VnStoryPlayer.cs`。
+  GUID 是 Unity 认资产的唯一凭据，**换了 GUID 等于换了一个资产**——使用者工程里所有指向这些脚本的
+  组件引用都会变成 Missing，且预制体与场景无法自动找回。这批 GUID 已全部回到 1.5.0 时的原值，
+  **从 1.5.0 直升 1.5.1 不会经历这个状态**；只有在这两次提交之间拉过 `main` 的人需要重新拉一次。
+
+### 变更
+
+- **样例瘦身**：删掉 Cartoon FX Remaster 中三个**未被任何预制体或脚本引用**的文件——
+  `CFXR_EmissionBySurface.cs`、`CFXR_ParticleText.cs`、`CFXR_ParticleTextFontAsset.cs`（合计约 740 行）。
+  样例实际在用的 `CFXR_Effect.cs` 与 `CFXR_Effect.CameraShake.cs` 保留，两个特效预制体
+  （`EF_Magic_Aura`、`EF_Bouncing_Glows_Bubble`）表现不变。`Third Party Notices.md` 的脚本计数已同步。
+- **样例角色预制体重新序列化**：`SP_Actor_Test_1/2.prefab` 上 `VnActorAnimator` 的 9 个字段由
+  `m_ActorPosSpeed` 一类的旧名迁移到 `actorPosSpeed`——这是 1.5.0 重命名序列化字段的连带结果，
+  在 Unity 打开工程时自动完成。数值与对象引用逐项保留，`actorAnimator` 的指向未丢失。
+- 样例场景的 `VnStoryPlayer` 实例记下了一条 `conversationName: Conversation 1` 覆写。
+  该值与预制体默认值相同，**无行为变化**。
+
 ## [1.5.0] - 2026-08-15
 
 补上文字冒险游戏右下角那排**播放控制**按钮：自动播放、播放速度、快进、新对话停止、隐藏 UI，
@@ -33,6 +58,10 @@
   （需要 `com.fs.gameframework` ≥ 0.9.4，本次一并给它加了 `IsPlaying` / `SetPitch`）。
 - **`VnPlaybackButton` / `VnUiHider`** 与 14 张白色简约图标（每个功能开 / 关两态，开态带外发光），
   样例的 `DialogueUI_Main` 右下角已接好。图标由 `Tools~/icons/generate_icons.py` 程序化生成、可重跑。
+- **`VnActorAnimator` 的 `Reset()` 自动补齐引用**：把组件添加到物体上、或在 Inspector 里点 Reset 时，
+  从自身与子物体上自动填好 `actorAnimator` 与 `particleSystemRoot`，省掉手工拖拽。
+  只在字段为空时才填（主动重置组件时不覆盖已有配置），查找含未激活子物体。
+  整段包在 `UNITY_EDITOR` 内，不进发行版程序集。
 
 ### 变更
 

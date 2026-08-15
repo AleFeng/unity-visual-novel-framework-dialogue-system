@@ -12,7 +12,7 @@
 
 - **来源**：Jean Moreno，Unity Asset Store 付费资产（Cartoon FX Remaster）
 - **版权**：`(c) 2012-2025 Jean Moreno`（见 `Scripts/CFXR_Effect.cs` 等文件头）
-- **包含**：`Graphics/`（贴图与材质）、`Meshes/`、`Shaders/`、`Scripts/`（5 个 C# 脚本）
+- **包含**：`Graphics/`（贴图与材质）、`Meshes/`、`Shaders/`、`Scripts/`（2 个 C# 脚本）
 - **许可**：遵循 Unity Asset Store 的
   [Asset Store EULA](https://unity.com/legal/as-terms)。**不在本包 MIT 授权范围内。**
 - **说明**：仅作为演示样例中两个特效预制体（`EF_Magic_Aura`、`EF_Bouncing_Glows_Bubble`）的
