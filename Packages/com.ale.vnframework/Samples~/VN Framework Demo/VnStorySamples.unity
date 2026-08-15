@@ -891,6 +891,10 @@ PrefabInstance:
       propertyPath: autoPlayTiming
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 8285465569824699616, guid: d9bf45828f6828b458ebfcaefcdf4f99, type: 3}
+      propertyPath: conversationName
+      value: Conversation 1
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
