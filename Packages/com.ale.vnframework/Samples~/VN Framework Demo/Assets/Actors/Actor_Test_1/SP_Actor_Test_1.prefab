@@ -45,15 +45,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 51f9cc3ca7cdbb848b1ab3ed9bb87207, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp-firstpass::PixelCrushers.DialogueSystem.VNStoryFramework.VNActorAnimator
-  m_AutoInit: 0
-  m_ActorPosSpeed: 3.5
-  m_ActorPosEase: 3
-  m_ActorRotateSpeed: 360
-  m_ActorRotateEase: 3
-  m_ActorScaleSpeed: 1.5
-  m_ActorScaleEase: 3
-  m_ActorAnimator: {fileID: 7663239551767054037}
-  m_ParticleSystemRoot: {fileID: 0}
+  autoInit: 0
+  actorPosSpeed: 3.5
+  actorPosEase: 3
+  actorRotateSpeed: 360
+  actorRotateEase: 3
+  actorScaleSpeed: 1.5
+  actorScaleEase: 3
+  actorAnimator: {fileID: 7663239551767054037}
+  particleSystemRoot: {fileID: 0}
 --- !u!1 &5003314378017644441
 GameObject:
   m_ObjectHideFlags: 0
