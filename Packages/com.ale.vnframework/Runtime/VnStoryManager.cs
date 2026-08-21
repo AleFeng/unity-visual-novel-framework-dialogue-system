@@ -404,6 +404,8 @@ namespace Ale.VnFramework
         {
             // 清除所有 对话 头像图像
             ClearAllDialogueHeadImage();
+            // 清除 对话 头像预制体
+            ClearAllDialogueHeadPrefab();
             // 清空并隐藏 背景图像组件
             ClearAllBackground();
             // 清除所有 角色 预制体。场景特效 也会全部清除。
@@ -429,6 +431,9 @@ namespace Ale.VnFramework
             
             // 处理 对话变化
             OnConversationLineDialogueChange(subtitle);
+            // 处理 头像预制体变化。必须排在 OnConversationLineDialogueChange 之后：
+            // 它要先让图片头像那一路把本行的 DialogueHead 处理完，才好判断该不该把图片头像清掉。
+            OnConversationLineDialogueHeadPrefabChange(subtitle);
             // 处理 背景变化
             OnOnConversationLineBackgroundChange(subtitle);
             // 处理 角色变化
@@ -1182,8 +1187,312 @@ namespace Ale.VnFramework
             _dialogueHeadActorName = null;
         }
         #endregion
+
+        #region 头像预制体
+        [Header("对话-头像预制体")]
+#if ATK_ADDRESSABLE
+        [Tooltip("对话-头像预制体 文件夹路径")]
+        [SerializeField] private string dialogueHeadPrefabAddressableFolder = "VNFrameworkDemo/Assets/ActorsHead/";
+        [Tooltip("对话-头像预制体 扩展名。一般使用Prefab")]
+        [SerializeField] private string dialogueHeadPrefabExtension = ".prefab";
+#endif
+        [Tooltip("Conversation中，节点上配置的 字段标题 头像预制体。[预制体名称|延迟显示]")]
+        [SerializeField] private string dialogueHeadPrefabFieldTitle = "DialogueHeadPrefab";
+        [Tooltip("Conversation中，节点上配置的 字段标题 头像动画。[动画Key1|动画Key2|动画Key3|...]")]
+        [SerializeField] private string dialogueHeadAnimFieldTitle = "DialogueHeadAnim";
+
+        // 当前头像预制体的加载数据。assetAddress 为空表示当前没有加载任何头像预制体。
+        private FActorPrefabLoadData _dialogueHeadPrefabLoadData;
+        // 延迟显示的补间句柄。卸载时必须 Kill——否则实例已经销毁，回调还会去初始化一个空引用。
+        private ToolkitTweenHandle _dialogueHeadPrefabDelayTween;
+
+        /// <summary>
+        /// 对话行 头像预制体变化。
+        ///
+        /// <para>与 <c>DialogueHead</c>（Sprite → <c>SetActorPortraitSprite</c> → 对话框 Image）是<b>两套并存</b>的
+        /// 头像方案，按节点上配了哪个字段选用。预制体这套把一个在 Canvas 下做好的 UI 预制体实例化到字幕面板的
+        /// 头像父节点下；预制体上挂了 <see cref="VnActorAnimator"/> 的话，还能用 <c>DialogueHeadAnim</c>
+        /// 切换状态，做成会动的表情头像。</para>
+        ///
+        /// <para>本类<b>不负责渲染</b>——RectTransform 布局、遮罩、层级都是做预制体时自行解决的问题。
+        /// 这里只做四件事：实例化、挂到正确的锚点下、把动画状态喂给 VnActorAnimator、换人时回收。</para>
+        /// </summary>
+        /// <param name="subtitle"></param>
+        private void OnConversationLineDialogueHeadPrefabChange(Subtitle subtitle)
+        {
+            var headPrefabParam = Field.LookupValue(subtitle.dialogueEntry.fields, dialogueHeadPrefabFieldTitle);
+
+            // 节点上没有这个字段：本行不由预制体头像接管，整段跳过，头像交给 DialogueHead 那一路。
+            // 判据与其它演出字段一致——Field.LookupValue 对**缺失**字段返回 null，对**空值**字段返回 ""。
+            // 正是靠这个区分，两套头像方案才能在同一个剧情库里按节点混用。
+            if (headPrefabParam == null) return;
+
+            // 配了字段但值为空：卸载当前头像预制体
+            if (headPrefabParam == "")
+            {
+                UnloadDialogueHeadPrefab();
+                return;
+            }
+
+            // 预制体头像接管本行。本行若没配图片头像，就把 actor 上绑着的 portrait 清掉，
+            // 否则上一行 DialogueHead 留下的那张图会与预制体头像一起出现在对话框里。
+            //
+            // ⚠️ 清的是**绑定**，而不是直接 SetGameObjectActive(portraitImage, false)：
+            // 面板自己在 StandardUISubtitlePanel.SetPortraitImage 里按 `sprite != null` 管 Image 的显隐，
+            // 直接改激活状态会在下一次 SetContent 时被它覆盖回来。
+            var dialogueHead = Field.LookupValue(subtitle.dialogueEntry.fields, dialogueHeadFieldTitle);
+            var speakerName = subtitle.speakerInfo != null ? subtitle.speakerInfo.nameInDatabase : null;
+            if (string.IsNullOrEmpty(dialogueHead) && !string.IsNullOrEmpty(speakerName))
+                SetDialogueHeadImage(null, speakerName);
+
+            // 取锚点。取不到就整行放弃——实例化到错误的父节点下，比压根不显示更难查。
+            var anchor = GetDialogueHeadPrefabAnchor(subtitle);
+            if (!anchor) return;
+
+            // 头像预制体名称 与 延迟显示
+            ParseStringAndFloat(headPrefabParam, out var headAssetPrefab, out var delay);
+            if (string.IsNullOrEmpty(headAssetPrefab))
+            {
+                UnloadDialogueHeadPrefab();
+                return;
+            }
+
+#if ATK_ADDRESSABLE
+            // 使用Addressables时，添加文件夹路径与扩展名
+            var headAssetPrefabAddress = $"{dialogueHeadPrefabAddressableFolder}{headAssetPrefab}{dialogueHeadPrefabExtension}";
+#else
+            var headAssetPrefabAddress = headAssetPrefab;
+#endif
+            // 获取 头像动画组
+            var headAnimParam = Field.LookupValue(subtitle.dialogueEntry.fields, dialogueHeadAnimFieldTitle);
+
+            LoadDialogueHeadPrefab(headAssetPrefab, headAssetPrefabAddress, anchor, headAnimParam, delay);
+        }
+
+        /// <summary>
+        /// 取头像预制体的挂载锚点：当前这行字幕会显示在哪块面板上，头像就挂到那块面板的头像父节点下。
+        ///
+        /// <para>字幕面板会随说话人在 NPC / PC 两块之间切换，所以锚点必须<b>逐行</b>取，不能缓存。</para>
+        ///
+        /// <para>⚠️ 取的是 <c>portraitImage</c> 的<b>父节点</b>而不是 Image 本身：Image 会被面板按
+        /// <c>sprite != null</c> 反复 SetActive，挂在它下面的话，一旦本行没有图片头像就会跟着一起消失。
+        /// 做兄弟节点则不受影响。</para>
+        /// </summary>
+        /// <param name="subtitle"></param>
+        /// <returns>锚点 Transform；取不到时返回 null。</returns>
+        private Transform GetDialogueHeadPrefabAnchor(Subtitle subtitle)
+        {
+            var standardUI = DialogueManager.dialogueUI as StandardDialogueUI;
+            var subtitleControls = standardUI != null && standardUI.conversationUIElements != null
+                ? standardUI.conversationUIElements.standardSubtitleControls
+                : null;
+            if (subtitleControls == null)
+            {
+                Debug.LogWarning("剧情演出 >> 取不到 StandardDialogueUI 的字幕控制器，头像预制体无处安放。" +
+                                 "请确认对话 UI 使用的是 Standard Dialogue UI。");
+                return null;
+            }
+
+            var panel = subtitleControls.GetPanel(subtitle, out _);
+            if (!panel || !panel.portraitImage)
+            {
+                Debug.LogWarning("剧情演出 >> 当前字幕面板未配置 Portrait Image，头像预制体无处安放。" +
+                                 "请在该字幕面板的 Portrait Image 字段上指定头像图片组件。");
+                return null;
+            }
+
+            return panel.portraitImage.transform.parent;
+        }
+
+        /// <summary>
+        /// 加载头像预制体。
+        /// </summary>
+        /// <param name="headAssetPrefab">头像预制体名称</param>
+        /// <param name="headAssetPrefabAddress">头像预制体资源地址</param>
+        /// <param name="anchor">挂载锚点</param>
+        /// <param name="headAnimParam">头像动画组</param>
+        /// <param name="delay">延迟显示</param>
+        private void LoadDialogueHeadPrefab(string headAssetPrefab, string headAssetPrefabAddress,
+            Transform anchor, string headAnimParam, float delay)
+        {
+            // 已经加载着同一个预制体：不重新实例化，只更新锚点与动画状态。
+            // 连续几行同一个人说话是最常见的写法，每行都重新实例化会让头像逐行闪一下，
+            // 也会让 Spine / Live2D 的循环动画不断从头拉起。
+            if (_dialogueHeadPrefabLoadData.prefabInstance &&
+                _dialogueHeadPrefabLoadData.assetAddress == headAssetPrefabAddress)
+            {
+                ReparentDialogueHeadPrefab(anchor);
+                SetDialogueHeadPrefabAnim(_dialogueHeadPrefabLoadData, headAnimParam);
+                return;
+            }
+
+            // 换人了：先卸载旧的，再加载新的
+            UnloadDialogueHeadPrefab();
+
+            LogVerbose($"剧情演出 >> 加载头像预制体 '{headAssetPrefab}'。");
+
+            LoadAsset<GameObject>(headAssetPrefabAddress, (headPrefab) =>
+            {
+                if (!headPrefab)
+                {
+                    // 加载失败这里**不能**调 UnloadAsset：LoadAsset 在失败路径上既没入缓存也没加计数
+                    // （见其回调里的 `if (!succeeded)` 分支），补一次卸载会把别人的计数扣掉。
+                    Debug.LogWarning($"剧情演出 >> 头像预制体 '{headAssetPrefab}' 加载失败。请检查名称是否正确。");
+                    return;
+                }
+
+                // 锚点可能在异步加载期间失效（对话已结束、面板被销毁）。此时实例化出来的头像
+                // 会挂到场景根上，再也不会被面板的显隐带走，也没人负责销毁它。
+                if (!anchor)
+                {
+                    LogVerbose($"剧情演出 >> 头像预制体 '{headAssetPrefab}' 加载完成时锚点已失效，放弃本次显示。");
+                    UnloadAsset(headAssetPrefabAddress);
+                    return;
+                }
+
+                // 实例化到锚点下。第三个参数 false = 保留预制体的**局部**变换：
+                // 这是 UI 预制体，位置尺寸由它自己的 RectTransform 决定，不能按世界坐标摆。
+                var headPrefabInstance = Instantiate(headPrefab, anchor, false);
+                headPrefabInstance.SetActive(false); // 等 InitDialogueHeadPrefab 激活（延时期间也靠它藏住）
+
+                // 头像动画组件。缺失是受支持的降级形态——静态图头像本就不需要它，
+                // 只是没有淡入淡出与状态切换，故用 LogVerbose 而非 Warning。
+                var headAnimator = headPrefabInstance.GetComponent<VnActorAnimator>();
+                if (!headAnimator)
+                    LogVerbose($"剧情演出 >> 头像预制体 '{headAssetPrefab}' 未挂载 VnActorAnimator，" +
+                               $"按静态头像处理（无淡入淡出与动画状态，{dialogueHeadAnimFieldTitle} 字段不生效）。");
+
+                var loadData = new FActorPrefabLoadData
+                {
+                    assetAddress = headAssetPrefabAddress,
+                    prefabAsset = headPrefab,
+                    prefabInstance = headPrefabInstance,
+                    actorAnimator = headAnimator
+                };
+                _dialogueHeadPrefabLoadData = loadData;
+
+                if (delay > 0f)
+                {
+                    _dialogueHeadPrefabDelayTween = VnTween.DelayedCall(delay,
+                        () => InitDialogueHeadPrefab(loadData, headAnimParam), unscaled: false);
+                }
+                else
+                {
+                    InitDialogueHeadPrefab(loadData, headAnimParam);
+                }
+            });
+        }
+
+        /// <summary>
+        /// 初始化头像预制体：激活、淡入、切到目标动画状态。
+        /// </summary>
+        /// <param name="loadData"></param>
+        /// <param name="headAnimParam">头像动画组</param>
+        private void InitDialogueHeadPrefab(FActorPrefabLoadData loadData, string headAnimParam)
+        {
+            if (!loadData.prefabInstance) return;
+
+            if (!loadData.actorAnimator)
+            {
+                // 静态头像：激活即完成
+                loadData.prefabInstance.SetActive(true);
+                return;
+            }
+
+            // ⚠️ 位置/旋转/缩放一律回传**实例当前值**，等于让 ExecuteInit 在这三项上空转。
+            // ExecuteInit 写的是世界变换（transform.position / eulerAngles / localScale），
+            // 对 UI 预制体来说那会把它从 Canvas 的布局里拽出去。头像的位置尺寸应当由预制体
+            // 自己的 RectTransform 决定，剧本不该、也没有字段去干预它。
+            var headTrans = loadData.prefabInstance.transform;
+
+            // 动画组：字段缺失（null）时传 null，表示沿用预制体自身配置的初始状态；
+            // 字段存在但为空时传空数组，表示明确不进入任何状态。判据与 InitActorPrefab 一致
+            // ——ParseStringArray 对两者都返回空数组，不看原串就区分不出来。
+            ParseStringArray(headAnimParam, out var toStateArray);
+            loadData.actorAnimator.ExecuteInit(headTrans.position, headTrans.eulerAngles, headTrans.localScale,
+                headAnimParam == null ? null : toStateArray);
+        }
+
+        /// <summary>
+        /// 切换头像预制体的动画状态。用于「同一个头像连续说话、只换表情」这条最常见的路径。
+        /// </summary>
+        /// <param name="loadData"></param>
+        /// <param name="headAnimParam">头像动画组</param>
+        private void SetDialogueHeadPrefabAnim(FActorPrefabLoadData loadData, string headAnimParam)
+        {
+            if (!loadData.prefabInstance) return;
+
+            // 实例可能还停在未激活状态（上一行走的是延迟显示，或延时尚未到点）
+            if (!loadData.prefabInstance.activeSelf) loadData.prefabInstance.SetActive(true);
+
+            if (!loadData.actorAnimator) return;
+
+            // 字段缺失时什么都不做——沿用当前状态。
+            // ⚠️ 不能在这里对 null 传空数组：SwitchStateArray 传空数组会把渲染器引用计数减到 0，
+            // 从而**淡出隐藏头像**（AnimatorBase 把可见性绑在状态使用计数上的既有语义）。
+            // 那会让「本行没写 DialogueHeadAnim」表现为头像凭空消失。
+            if (headAnimParam == null) return;
+
+            ParseStringArray(headAnimParam, out var toStateArray);
+            loadData.actorAnimator.SwitchStateArray(toStateArray);
+        }
+
+        /// <summary>
+        /// 把头像预制体移到新的锚点下。字幕在 NPC / PC 两块面板之间切换时需要。
+        /// </summary>
+        /// <param name="anchor"></param>
+        private void ReparentDialogueHeadPrefab(Transform anchor)
+        {
+            var instance = _dialogueHeadPrefabLoadData.prefabInstance;
+            if (!instance || !anchor) return;
+            if (instance.transform.parent == anchor) return;
+
+            // worldPositionStays: false —— 保留局部变换，让头像在新面板里落到同样的布局位置。
+            // 传 true 会按世界坐标换算，两块面板的 RectTransform 一旦尺寸不同，头像就会错位。
+            instance.transform.SetParent(anchor, false);
+        }
+
+        /// <summary>
+        /// 卸载当前头像预制体。
+        /// </summary>
+        private void UnloadDialogueHeadPrefab()
+        {
+            // 先掐掉在途的延迟显示：实例马上要销毁了，回调再去 Init 就是操作空引用。
+            _dialogueHeadPrefabDelayTween.Kill();
+
+            var loadData = _dialogueHeadPrefabLoadData;
+            if (string.IsNullOrEmpty(loadData.assetAddress)) return;
+
+            // 先清空记录：下面的销毁可能带延时，期间不应再被任何路径当作「当前头像」使用
+            _dialogueHeadPrefabLoadData = default;
+
+            var assetAddress = loadData.assetAddress;
+            var instance = loadData.prefabInstance;
+
+            if (loadData.actorAnimator)
+            {
+                // 交给动画组件收尾（淡出、粒子播完再回收），完成后卸载资源
+                loadData.actorAnimator.ExecuteDestroy(() => UnloadAsset(assetAddress));
+                return;
+            }
+
+            // 静态头像：直接销毁并卸载。
+            // 与 UnloadActorPrefab 同一取舍——没挂组件也必须把 UnloadAsset 执行掉，
+            // 否则 Addressable 句柄会随每次换头像泄漏一个。
+            if (instance) Destroy(instance);
+            UnloadAsset(assetAddress);
+        }
+
+        /// <summary>
+        /// 清除 头像预制体。对话结束时调用。
+        /// </summary>
+        private void ClearAllDialogueHeadPrefab()
+        {
+            UnloadDialogueHeadPrefab();
+        }
         #endregion
-        
+        #endregion
+
         #region 背景
         [Header("背景")]
         [Tooltip("背景图像组件 当前")]
