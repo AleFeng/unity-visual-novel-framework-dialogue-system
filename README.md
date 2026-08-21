@@ -134,7 +134,9 @@ Pixel Crushers 官方提供了 asmdef 方案（见其 `Dialogue System/Scripts/_
 > 再装本插件。** Unity Package Manager 不支持在 `package.json` 的 `dependencies` 里写 git URL，
 > 无法自动拉取，故**顺序不能颠倒**：`com.ale.toolkit` → `com.ale.animsimulatorsystem` → 本插件。
 > 漏装或颠倒会报 `找不到 Ale.Toolkit.*` / `Ale.AnimSimulatorSystem` 一类编译错——补装并等重新编译即可，
-> 无需重装本插件。
+> 无需重装本插件。\
+> com.ale.toolkit：`https://github.com/AleFeng/unity-ale-toolkit.git?path=/Packages/com.ale.toolkit`。\
+> com.ale.animsimulatorsystem：`https://github.com/AleFeng/unity-ale-anim-simulator.git?path=/Packages/com.ale.animsimulatorsystem`。
 
 `Window > Package Manager` → 左上角 `+` → `Install package from git URL...` → 粘贴：
 
