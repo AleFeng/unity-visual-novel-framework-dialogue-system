@@ -1,7 +1,25 @@
 using System;
+using System.Collections.Generic;
 
 namespace Ale.VnFramework
 {
+    /// <summary>
+    /// 一条剧情分支选择：某个 Dialogue System 全局变量当前的取值。
+    ///
+    /// <para>存「变量名 → 数值」而不是「分支点编号 → 选项号」：变量名是剧本与条件表达式
+    /// 实际引用的东西（<c>Variable["…"] == N</c>），直接按它存取就不需要任何命名约定的换算；
+    /// 变量叫什么由宿主的剧本生成规则决定，本包不关心。</para>
+    /// </summary>
+    [Serializable]
+    public sealed class VnStoryChoiceData
+    {
+        /// <summary>Dialogue System 全局变量名。</summary>
+        public string variableName;
+
+        /// <summary>取值。约定 0 表示「未选择」，通常不必存。</summary>
+        public int value;
+    }
+
     /// <summary>
     /// 播放控制的**配置**部分（玩家在按钮条上调的那些）。
     ///
@@ -60,5 +78,15 @@ namespace Ale.VnFramework
         /// 见 <see cref="VnReadHistory.BuildStamp"/>。
         /// </summary>
         public string readHistoryStamp;
+
+        /// <summary>
+        /// 剧情分支选择（影响剧情走向的选项变量）。为 null 或空表示没有任何选择记录。
+        ///
+        /// <para>基类的 <c>GetSaveData</c> / <c>LoadSaveData</c> 不填不读这块——采集哪些变量、
+        /// 何时回填，是宿主子类的事（哪些变量算「剧情选择」由宿主的剧本约定决定）。
+        /// 与 <see cref="readHistory"/> 不同，选择记录**不受**剧本指纹校验约束：
+        /// 变量按名字寻址，剧本重导入不会让它错位。</para>
+        /// </summary>
+        public List<VnStoryChoiceData> choices;
     }
 }

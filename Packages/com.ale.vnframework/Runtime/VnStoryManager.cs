@@ -102,7 +102,10 @@ namespace Ale.VnFramework
 #endif
         }
 
-        private void Start()
+        // protected virtual 而非 private：Unity 的魔法方法只认最派生的那份声明，
+        // 子类若各自声明一个 private Start，本方法会被**静默跳过**，SimStatus 的开关随之失效
+        // ——那是最难查的一类坏法。开放覆写并要求调用 base，与 Awake / OnDestroy 同一约定。
+        protected virtual void Start()
         {
             if (Instance != this) return;
 
@@ -138,8 +141,10 @@ namespace Ale.VnFramework
         /// 继续玩不会改变已取出的这份快照。
         ///
         /// <para><b>本包只提供 Get / Set，不实现 Load / Save</b>——落盘归宿主的存档系统。</para>
+        /// <para>覆写点：宿主子类在 base 的结果上补充自己的数据（典型是
+        /// <see cref="VnStorySaveData.choices"/>——采集哪些变量算「剧情选择」由宿主的剧本约定决定）。</para>
         /// </summary>
-        public VnStorySaveData GetSaveData() => new VnStorySaveData
+        public virtual VnStorySaveData GetSaveData() => new VnStorySaveData
         {
             version = 1,
             settings = Playback ? Playback.GetSettings() : null,
@@ -154,8 +159,11 @@ namespace Ale.VnFramework
         /// <para>接受 <c>null</c> 与字段缺失的脏数据（跳过而非抛异常），且<b>不触发任何变更事件</b>——
         /// 这是 <see cref="ISaveable"/> 一族的契约。界面刷新由调用方在载入完成后自行触发，
         /// 按钮条可调 <c>Playback.NotifyStateChanged()</c>。</para>
+        /// <para>覆写点：宿主子类在 base 之后回填自己的数据（典型是分支选择变量）。
+        /// ⚠️ base 在剧本指纹不一致时会提前 return（丢弃已读记录），但那只针对按节点 ID
+        /// 寻址的已读位图——按名字寻址的数据不受影响，子类应在 base 返回后照常回填。</para>
         /// </summary>
-        public void LoadSaveData(VnStorySaveData data)
+        public virtual void LoadSaveData(VnStorySaveData data)
         {
             if (data == null)
             {
@@ -187,8 +195,10 @@ namespace Ale.VnFramework
         /// <summary>
         /// 清空本系统的全部运行时状态，回到初始态（开新游戏 / 读档前清场）。
         /// 同样<b>不触发变更事件</b>。
+        /// <para>覆写点：宿主子类在 base 之后清掉自己的数据。⚠️ <see cref="LoadSaveData"/>
+        /// 收到 null 时会调本方法，覆写里不要再反过来调 LoadSaveData，会成环。</para>
         /// </summary>
-        public void ResetAll()
+        public virtual void ResetAll()
         {
             ReadHistory.ClearAll();
             if (Playback) Playback.ResetToDefaults();
@@ -444,6 +454,28 @@ namespace Ale.VnFramework
             OnConversationLineAudioChange(subtitle);
             // 处理 玩法系统
             OnConversationLineGamePlaySystem(subtitle);
+
+            // 分支选项落地通知。带「选项按钮已读变量」字段的节点即分支选项节点——
+            // 这是本包与剧本的既有约定（该字段同时驱动选项按钮的已读 UI）。
+            // 此刻节点的 Script（写入已读标记与选择变量）已由 Dialogue System 执行完毕：
+            // ConversationModel.GetState 先 ExecuteEntry（Lua.Run userScript）后才轮到本广播，
+            // 子类在这里读取选择变量拿到的必然是新值。
+            var isReadVariable = Field.LookupValue(subtitle.dialogueEntry.fields,
+                conversationResponseButtonVariableIsReadFieldTitle);
+            if (isReadVariable != null) OnConversationChoiceSelected(subtitle);
+        }
+
+        /// <summary>
+        /// 当 玩家选中了一个分支选项（该选项的对话行开始播放、其 Script 已执行完毕）。
+        /// <para>覆写点：宿主子类在此记录剧情选择（读取刚被 Script 写入的选择变量）、
+        /// 触发选择时自动存档等。基类空实现，覆写无须调用 base。</para>
+        /// <para>判定依据是节点上的「选项按钮已读变量」字段
+        /// （<see cref="ConversationResponseButtonVariableIsReadFieldTitle"/>）——
+        /// 没配该字段的响应节点（如「全部阅读后继续」的汇合选项）不会触发本通知。</para>
+        /// </summary>
+        /// <param name="subtitle">选项节点的字幕。conversationID / dialogueEntry 可定位到具体选项。</param>
+        protected virtual void OnConversationChoiceSelected(Subtitle subtitle)
+        {
         }
         
         /// <summary>
