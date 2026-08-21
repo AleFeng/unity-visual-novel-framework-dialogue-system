@@ -25,7 +25,9 @@ Dialogue System 负责对话数据、分支逻辑与 Lua 环境；本插件把�
 | | `Actor1Anim` ~ | `Key1\|Key2\|Key3` | 动画状态 |
 | **特效** | `Effect1Prefab` ~ `Effect3Prefab` | `文件夹/预制体名` | 同角色，四组条目一致 |
 | | `Effect1Pos` / `Rotate` / `Scale` / `Anim` ~ | 同上 | |
-| **头像** | `DialogueHead` | 图片文件名 | 对话框头像 |
+| **头像** | `DialogueHead` | 图片文件名 | 对话框头像（图片） |
+| | `DialogueHeadPrefab` | `预制体名称\|延迟` | 对话框头像（预制体），与 `DialogueHead` 二选一 |
+| | `DialogueHeadAnim` | `Key1\|Key2\|Key3` | 预制体头像的动画状态 |
 | **音频** | `AudioBGM1` ~ / `AudioAmbient1` ~ / `AudioSFX1` ~ / `AudioVoice1` ~ | `Key\|音量\|音调\|延迟` | 见[音频接缝](#音频接缝) |
 | **文本** | `DialogueTypewriterSpeed` | 倍率 | 打字机速度 |
 
@@ -51,13 +53,15 @@ Dialogue System 负责对话数据、分支逻辑与 Lua 环境；本插件把�
 演出核心单例（派生自 `ToolkitMonoSingleton`）。订阅 Dialogue System 的对话推进，逐节点解析字段条目，
 驱动背景 / 角色 / 特效 / 头像 / 消息，并统一管理预制体的加载与卸载。
 
-- **资源目录约定**：背景 / 角色 / 头像 / 特效各配一组「文件夹路径 + 扩展名」
+- **资源目录约定**：背景 / 角色 / 头像 / 头像预制体 / 特效各配一组「文件夹路径 + 扩展名」
   （`backgroundAddressableFolder` / `…Extension`、`actorAddressableFolder` / `…Extension`、
-  `dialogueHeadAddressableFolder` / `dialogueHeadExtension`、`effectAddressableFolder` / `…Extension`），
+  `dialogueHeadAddressableFolder` / `dialogueHeadExtension`、
+  `dialogueHeadPrefabAddressableFolder` / `dialogueHeadPrefabExtension`、
+  `effectAddressableFolder` / `…Extension`），
   配置里只写资源名。路径以 `Assets/` 开头、以 `/` 结尾。
   加载经 `ToolkitAssets` 统一入口——开启 `ATK_ADDRESSABLE` 时走 Addressables 异步加载并回收句柄，
   否则回落 `Resources`。
-  ⚠️ **这八个设置项本身包在 `#if ATK_ADDRESSABLE` 内，未开启该宏时不会出现在 Inspector 上。**
+  ⚠️ **这十个设置项本身包在 `#if ATK_ADDRESSABLE` 内，未开启该宏时不会出现在 Inspector 上。**
 - **预制体生命周期**：角色与特效走**同一套**加载 / 定位 / 卸载流程。预制体设置一次持续存在，
   把 `Value` 置空才清除。
 - **补间**：位置 / 旋转 / 缩放的第 4 个参数是速度倍率；背景切换可经 Dialogue System 的
@@ -365,6 +369,12 @@ VnStoryManager.Instance.ResetAll();
 > 本类只实现非泛型的 `ISaveable`，不实现 `ISaveable<TState>`——后者是 `List<TState>` 形状、
 > 为集合型系统设计，而这里是「一个设置块 + 一份已读位图」的单体聚合。
 
+> **覆写点（1.6.0 起）**：三个方法均为 `virtual`。`VnStorySaveData.choices`
+> （分支选择：`List<VnStoryChoiceData>`，变量名 → 取值）由宿主子类在覆写里采集与回填——
+> 哪些变量算「剧情选择」是宿主剧本约定的事，基类不填不读；按名字寻址，不受剧本指纹校验约束。
+> 配套钩子 `OnConversationChoiceSelected(Subtitle)` 在玩家选中分支选项、其 Script 执行完毕后触发。
+> ⚠️ `LoadSaveData(null)` 会调 `ResetAll()`——覆写 `ResetAll` 时不要反过来调 `LoadSaveData`，会成环。
+
 ### 接入自己的 UI
 
 不想用样例那套按钮的话，直接调控制器即可，方法都能挂到 `Button.OnClick`：
@@ -422,7 +432,7 @@ playback.StateChanged += RefreshMyIcons;
 完整图文步骤见 [VnStoryManager 使用文档](Docs~/VnStoryManager/VnStoryManager.md)，此处为脉络：
 
 1. **剧情演出管理器预制体** —— 在 Project 面板的预制体源文件上改配置（不是场景实例），
-   配好四组资源「文件路径与类型」和各类「字段条目的标题」。二者都有可用默认值，
+   配好五组资源「文件路径与类型」和各类「字段条目的标题」。二者都有可用默认值，
    [通常无需修改](Docs~/VnStoryManager/VnStoryManager.md#资源配置)。
 2. **资源导入** —— 按类别放进约定目录：
    [背景图片](Docs~/VnStoryManager/VnStoryManager.md#背景图片的导入)、
@@ -796,10 +806,11 @@ public static class VnReadHistoryCodec
     public static bool TryDecode(string base64, out List<FVnReadRecord> records, out string error);
 }
 
-// VnStoryManager 实现 Ale.Toolkit.Runtime.ISaveable
-public VnStorySaveData GetSaveData();               // 深拷贝
-public void LoadSaveData(VnStorySaveData data);     // 覆盖语义，容忍 null 与脏数据，不触发事件
-public void ResetAll();
+// VnStoryManager 实现 Ale.Toolkit.Runtime.ISaveable；1.6.0 起可覆写，宿主子类在 base 上扩展
+public virtual VnStorySaveData GetSaveData();           // 深拷贝。覆写点：补充 choices 等宿主数据
+public virtual void LoadSaveData(VnStorySaveData data); // 覆盖语义，容忍 null 与脏数据，不触发事件
+public virtual void ResetAll();                          // 覆写里不要反调 LoadSaveData（成环）
+protected virtual void OnConversationChoiceSelected(Subtitle subtitle); // 分支选项落地（其 Script 已执行完毕）；基类空实现
 ```
 
 ### `VnPlaybackButton` / `VnUiHider`

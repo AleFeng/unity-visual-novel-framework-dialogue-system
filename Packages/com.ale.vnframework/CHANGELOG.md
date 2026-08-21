@@ -9,6 +9,58 @@
 > `PixelCrushers.DialogueSystem.VnStoryFramework` → `Ale.VnFramework`。脚本 `.meta` 的 GUID 全部保留，
 > 既有场景与预制体的组件引用不受影响。**升级前请先读下方「⚠ 前置条件」。**
 
+## [1.6.0] - 2026-08-21
+
+### 新增
+
+- **预制体动画头像**：节点字段 `DialogueHeadPrefab`（`预制体名称|延迟显示`）与
+  `DialogueHeadAnim`（`动画Key1|动画Key2|…`）。与 `DialogueHead`（图片头像）**两套并存**，
+  按节点上配了哪个字段选用，同一个剧情库里可逐节点混用。把在 Canvas 下做好的 UI 预制体
+  实例化到当前字幕面板 `portraitImage` 的**父节点**下；预制体上挂 `VnActorAnimator` 即可用
+  `DialogueHeadAnim` 切换动画状态（会动的表情头像），不挂则按静态头像降级（无淡入淡出与状态切换）。
+  - 同一预制体连续行**不重新实例化**，只更新锚点与动画状态——连续几行同一个人说话是最常见的写法，
+    每行重实例化会让头像逐行闪一下，也会让 Spine / Live2D 的循环动画不断从头拉起。
+    字幕在 NPC / PC 两块面板间切换时，把实例移到新面板的锚点下（保留局部变换）。
+  - 值为空＝卸载当前头像；字段缺失＝本行不由预制体头像接管，交给 `DialogueHead` 那一路。
+  - 配了预制体头像而没配图片头像的行，会把 actor 上绑着的 portrait **绑定**清掉——
+    而不是直接关 Image：面板按 `sprite != null` 自管 Image 显隐，直接改激活状态会被下一次
+    `SetContent` 覆盖回来。这是为了防止上一行的图片头像与预制体头像同框。
+  - `ATK_ADDRESSABLE` 下新增两个设置项：`DialogueHeadPrefabAddressableFolder`（默认
+    `VNFrameworkDemo/Assets/ActorsHead/`）与 `DialogueHeadPrefabExtension`（默认 `.prefab`）。
+  - 卸载经 `VnActorAnimator.ExecuteDestroy` 淡出收尾，静态头像直接销毁；两条路都执行 `UnloadAsset`，
+    Addressable 句柄不泄漏。对话结束时随其它演出对象一并清除，延迟显示的在途补间也会被掐掉。
+- **存档：分支选择字段与覆写点**（为宿主子类记录「剧情选择」开的口）：
+  - `VnStorySaveData.choices`：`List<VnStoryChoiceData>`（Dialogue System 全局变量名 → 取值）。
+    基类的 `GetSaveData` / `LoadSaveData` **不填不读**这块——采集哪些变量算「剧情选择」、何时回填，
+    归宿主子类；按名字寻址，**不受**剧本指纹校验约束（指纹不一致丢弃的只是按节点 ID 寻址的已读位图）。
+  - `GetSaveData` / `LoadSaveData` / `ResetAll` 改为 `virtual`，`Start` 改为 `protected virtual`。
+  - 新钩子 `protected virtual OnConversationChoiceSelected(Subtitle)`：玩家选中一个分支选项、
+    该节点的 Script 已执行完毕后触发（判定依据＝节点配了「选项按钮已读变量」字段；
+    DS 的 `ConversationModel.GetState` 先 `ExecuteEntry` 后才广播，钩子里读选择变量拿到的必然是新值）。
+    基类空实现，覆写无须调 base。
+
+### 变更
+
+- **`VnStoryPlayer.Play` 在播放中一律静默忽略后续调用**：此前只拦「同名对话连点」（带一条告警日志），
+  播放中传入**不同**对话名会直接再次启动；现在只要 `IsPlaying` 就忽略，告警也一并移除。
+  播放中想切换剧情，先 `Stop()` 再 `Play(...)`。
+
+### 三条反直觉的事实（备查）
+
+**① `DialogueHeadAnim` 字段缺失 ≠ 空值。** 缺失（null）＝沿用当前动画状态、什么都不做；
+不能图省事对缺失也传空数组——`SwitchStateArray` 收到空数组会把渲染器的状态使用计数减到 0，
+按 `AnimatorBase`「可见性绑在计数上」的既有语义，头像会**淡出消失**。
+现象是「本行没写 `DialogueHeadAnim`，头像却凭空不见了」。
+
+**② 头像预制体挂在 `portraitImage` 的父节点下，不是 Image 底下。** 面板在
+`SetPortraitImage` 里按 `sprite != null` 反复 SetActive 那个 Image——挂在它下面，
+本行一旦没有图片头像，预制体头像会跟着一起被关掉。做兄弟节点则不受影响。
+
+**③ `Start` 必须 `protected virtual`，子类不能各自声明 private 的。** Unity 的魔法方法只认
+**最派生**的那份声明：子类若自己写一个 `private Start`，基类的会被**静默跳过**——SimStatus
+的开关随之失效，「新对话停止」fail-open 成全量误报。覆写时调用 `base.Start()`，
+与 `Awake` / `OnDestroy` 同一约定。
+
 ## [1.5.1] - 2026-08-15
 
 只动样例与元数据的收尾发布。**`Runtime/` 下没有任何 `.cs` 改动**——公开 API、序列化字段与

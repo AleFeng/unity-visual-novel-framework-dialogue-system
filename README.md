@@ -145,7 +145,7 @@ https://github.com/AleFeng/unity-visual-novel-framework-dialogue-system.git?path
 这样装的是 `main` 的最新提交。**要固定版本，把 `#<tag>` 加在整条 URL 的最末尾**（必须在 `?path=` 之后）：
 
 ```
-https://github.com/AleFeng/unity-visual-novel-framework-dialogue-system.git?path=/Packages/com.ale.vnframework#1.5.1
+https://github.com/AleFeng/unity-visual-novel-framework-dialogue-system.git?path=/Packages/com.ale.vnframework#1.6.0
 ```
 
 可用的 tag 见 [Releases](https://github.com/AleFeng/unity-visual-novel-framework-dialogue-system/releases)。
@@ -157,7 +157,7 @@ https://github.com/AleFeng/unity-visual-novel-framework-dialogue-system.git?path
 
 > ⚠️ **启用了 `ATK_ADDRESSABLE` 时需要做一步登记**：把导入后的 `VN Framework Demo` 文件夹加入
 > Addressables 分组，并把该条目的 **Address 设为 `VNFrameworkDemo`**。
-> `VnStoryManager` 上的四个资源前缀（`VNFrameworkDemo/Assets/Actors/` 等）就是按这个短地址写的。
+> `VnStoryManager` 上的五个资源前缀（`VNFrameworkDemo/Assets/Actors/` 等）就是按这个短地址写的。
 >
 > **自 1.2.0 起有一键登记**：打开[欢迎窗口](#️-欢迎窗口)（`Tools > Ale Toolkit > VN Framework > Welcome`）
 > → **演示样例** → 点「登记样例到 Addressables」。它会自动找到导入后的样例目录、写入默认分组并设好地址；
@@ -184,18 +184,19 @@ https://github.com/AleFeng/unity-visual-novel-framework-dialogue-system.git?path
 `DialogueSystemController` 的 `Initial Database`。
 
 ### 3. 按目录导入美术资源
-在 `VnStoryManager` 上配置四组「文件夹路径 + 扩展名」，之后配置里只写资源名：
+在 `VnStoryManager` 上配置五组「文件夹路径 + 扩展名」，之后配置里只写资源名：
 
 | 类别 | 路径字段 | 扩展名字段 | 常用类型 |
 | --- | --- | --- | --- |
 | 背景 | `BackgroundAddressableFolder` | `BackgroundAddressableExtension` | `.jpg` |
 | 角色 | `ActorAddressableFolder` | `ActorAddressableExtension` | `.prefab` |
 | 角色头像 | `DialogueHeadAddressableFolder` | `DialogueHeadExtension` | `.png` |
+| 头像预制体 | `DialogueHeadPrefabAddressableFolder` | `DialogueHeadPrefabExtension` | `.prefab` |
 | 场景特效 | `EffectAddressableFolder` | `EffectAddressableExtension` | `.prefab` |
 
 > 路径以 `Assets/` 开头、以 `/` 结尾，例如 `Assets/ProductAssets/Story/ActorsHead/`。
 >
-> ⚠️ 这八个设置项包在 `#if ATK_ADDRESSABLE` 内——**未开启该宏时它们不会出现在 Inspector 上**，
+> ⚠️ 这十个设置项包在 `#if ATK_ADDRESSABLE` 内——**未开启该宏时它们不会出现在 Inspector 上**，
 > 资源改由 `Resources` 解析。见[可选宏开关](#-可选宏开关)。
 
 ### 4. 在对话节点上配置演出
@@ -209,7 +210,9 @@ https://github.com/AleFeng/unity-visual-novel-framework-dialogue-system.git?path
 | `Actor1Pos` | `-1\|-14\|0\|1.5` | 位置 `X\|Y\|Z\|速度倍率`，可只填前几项 |
 | `Actor1Anim` | `idle\|smile` | 动画 `Key1\|Key2\|…` |
 | `Effect1Prefab` | `EF_Magic_Aura` | 特效预制体 |
-| `DialogueHead` | `T_Role_Test_1_Head_Happy` | 对话框头像 |
+| `DialogueHead` | `T_Role_Test_1_Head_Happy` | 对话框头像（图片） |
+| `DialogueHeadPrefab` | `Role_Test_1/SP_Role_Test_1_Head` | 对话框头像（预制体）`名称\|延迟`；与 `DialogueHead` 二选一，留空清除 |
+| `DialogueHeadAnim` | `idle\|smile` | 预制体头像动画 `Key1\|Key2\|…` |
 | `AudioBGM1` | `bgm_forest\|1\|1\|0` | 音频 `Key\|音量\|音调\|延迟` |
 
 角色 / 特效 / 音频默认各有 3 个槽位（`Actor1~3Prefab`…），在管理器上用 `[+] [-]` 可增删份数以支持更多同屏对象。
