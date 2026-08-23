@@ -46,6 +46,12 @@ namespace Ale.VnFramework
 
             // 退订 结束事件
             Unsubscribe();
+
+            // 退订之后就再也收不到「对话结束」，IsPlaying 若还挂着 true 便是一句永远不会被纠正的谎：
+            // Play 开头那句「已在播放中则不重复播放」会把之后每一次播放请求都静默吞掉。
+            // 宿主是 UI 界面时必踩——关一次界面就会 OnDisable，表现为剧情从此点不动、且毫无报错。
+            // 这里只复位状态，不发 onPlayEnded：对象正在被停用，此刻广播「播完了」只会误导监听方。
+            IsPlaying = false;
         }
 
         #region 播放与停止
