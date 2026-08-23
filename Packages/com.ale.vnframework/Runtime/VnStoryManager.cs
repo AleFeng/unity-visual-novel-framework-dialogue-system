@@ -279,11 +279,34 @@ namespace Ale.VnFramework
 
         #region 流程控制
         private bool _isVnStoryStarted; // Vn故事系统 是否已经开始
+
+        // 正在等待「播放完成」的对话名。为空表示当前没有在等任何对话。
+        // 存名字而不是一个布尔标记：OnConversationEnd 对**任何**对话都会触发，
+        // 包括剧本里链去的其它对话、以及别处启动的联动对话，必须能认出是不是本次这段。
+        private string _pendingFinishConversation;
+        // 上面那段对话播放完成后的回调
+        private Action _onStoryFinished;
+        // 上面那段对话播放完成后，是否自动 StopVnStory
+        private bool _autoStopOnFinished = true;
         
         /// <summary>
         /// 开始 Vn故事系统
         /// </summary>
-        public void StartVnStory(string conversationName = null)
+        /// <param name="conversationName">要播放的对话名称。为空则只做淡入、不播对话。</param>
+        /// <param name="onFinished">对话<b>播放完成后</b>的回调。
+        /// <para>⚠️ 自然播完与中途 <see cref="StopVnStory"/> <b>都会</b>触发——两者都经 Dialogue System
+        /// 同一个 <c>OnConversationEnd</c> 收口，本框架不区分「播完」与「被打断」。
+        /// 需要区分的话，在调用 StopVnStory 前自行置标记。</para>
+        /// <para>⚠️ 回调运行在 <c>ConversationController.Close()</c> 的广播里，此时 Dialogue System
+        /// 尚未走完收尾。在回调里直接开下一段对话是可行的（见 <paramref name="autoStopOnFinished"/>），
+        /// 但更重的重入操作建议自行延后一帧。</para></param>
+        /// <param name="autoStopOnFinished">对话播放完成后是否自动调用 <see cref="StopVnStory"/>，默认 <c>true</c>。
+        /// <para>传 <c>false</c> 用于「一段接一段连播」：UI 与背景留在场上，由调用方自行决定何时收场。</para>
+        /// <para>注意此刻 <c>OnConversationEnd</c> 的清理已经执行完毕（角色 / 背景 / 音频均已硬清除），
+        /// 因此这次 StopVnStory 实际只淡出 UI 并复位 <c>_isVnStoryStarted</c>，
+        /// 好让下一次 StartVnStory 能重新走一遍淡入。</para></param>
+        public void StartVnStory(string conversationName = null, Action onFinished = null,
+            bool autoStopOnFinished = true)
         {
             // 会话级的淡入只做一次；重复调用时跳过，但不能连带把下面的「开始对话」也吞掉。
             // 一度是整个方法早退，于是：剧情自然播完后 _isVnStoryStarted 无人清除
@@ -301,9 +324,25 @@ namespace Ale.VnFramework
                 FadeInActorsAndEffects();
             }
 
+            if (string.IsNullOrEmpty(conversationName))
+            {
+                // 没有对话可等，onFinished 永远不会被触发。静默丢弃极难排查，故明确告警。
+                if (onFinished != null)
+                    Debug.LogWarning("剧情演出 >> StartVnStory 未传入对话名称，onFinished 不会被触发。", this);
+                return;
+            }
+
+            // 上一次登记的回调还没兑现就被顶掉：多半是漏了停止、或重复调用。告警但不阻断。
+            if (_onStoryFinished != null)
+                Debug.LogWarning($"剧情演出 >> '{_pendingFinishConversation}' 的 onFinished 尚未触发，" +
+                                 $"已被 '{conversationName}' 覆盖。", this);
+
+            _pendingFinishConversation = conversationName;
+            _onStoryFinished = onFinished;
+            _autoStopOnFinished = autoStopOnFinished;
+
             // 开始 指定的对话演出
-            if (!string.IsNullOrEmpty(conversationName))
-                StartStoryConversation(conversationName);
+            StartStoryConversation(conversationName);
         }
         
         /// <summary>
@@ -426,6 +465,53 @@ namespace Ale.VnFramework
             ClearAllSfx();
 
             // TODO: 恢复之前的BGM
+
+            // 播放完成收尾：触发 StartVnStory 登记的回调，并按需自动收场。
+            // ⚠️ 必须排在上面这些 Clear 之后：回调里若接着播下一段，
+            // 新一段刚加载出来的角色 / 背景会被这些 Clear 当场清掉。
+            HandleStoryConversationFinished();
+        }
+
+        /// <summary>
+        /// 对话播放完成后的收尾：触发 <see cref="StartVnStory"/> 登记的 onFinished，
+        /// 并按登记时的选择决定是否自动 <see cref="StopVnStory"/>。
+        ///
+        /// <para>只认「结束的这段正是本次等待的那段」：<c>OnConversationEnd</c> 对**任何**对话都会触发，
+        /// 包括剧本链去的其它对话与别处启动的联动对话。判据取
+        /// <c>DialogueManager.lastConversationEnded</c>——它由 <c>ConversationController.Close()</c>
+        /// 在广播 <c>OnConversationEnd</c> 的<b>前一行</b>写入，此刻取到的必然是刚结束的那段。</para>
+        /// </summary>
+        private void HandleStoryConversationFinished()
+        {
+            if (string.IsNullOrEmpty(_pendingFinishConversation)) return;
+            if (DialogueManager.lastConversationEnded != _pendingFinishConversation) return;
+
+            // ⚠️ 先取出、再清空、最后才调用，两个理由：
+            // ① 回调里若再次 StartVnStory，新登记的那份不会被本次的清空抹掉；
+            // ② 当「角色是对话管理器的父物体」时，DS 的 InformParticipants 会把 OnConversationEnd
+            //    广播两遍（它只挡住了 actor / conversant 恰好**就是**管理器的情形）。
+            //    清空在前，回调便只会执行一次。
+            var onFinished = _onStoryFinished;
+            var autoStop = _autoStopOnFinished;
+            _pendingFinishConversation = null;
+            _onStoryFinished = null;
+            _autoStopOnFinished = true;
+
+            try
+            {
+                onFinished?.Invoke();
+            }
+            catch (Exception e)
+            {
+                // 宿主回调抛异常不能把 DS 的收尾带崩：本方法运行在 ConversationController.Close()
+                // 的 BroadcastMessage 里，异常穿出去会让 Close() 后半段
+                //（把本次会话从活动列表移除、清空 currentConversationState）不再执行。
+                Debug.LogException(e, this);
+            }
+
+            // 回调里已经接着开了下一段时不收场，否则刚起头的新剧情会被立刻淡出。
+            // 此刻本段的 isActive 已在 Close() 里置 false，所以这里为 true 只可能是新开的那段。
+            if (autoStop && !DialogueManager.IsConversationActive) StopVnStory();
         }
         
         /// <summary>
