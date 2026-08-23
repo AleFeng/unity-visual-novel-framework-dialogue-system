@@ -107,7 +107,11 @@ namespace Ale.VnFramework
         /// <c>conversationEnded</c> 驱动，面向 Inspector 配置；前者面向调用方按次传入。</para></param>
         /// <param name="autoStopOnFinished">播放完成后是否自动 <c>StopVnStory</c>（淡出 UI/背景），
         /// 默认 <c>true</c>。传 <c>false</c> 用于一段接一段连播，由调用方决定何时收场。</param>
-        public void Play(string conversationNamePlay, Action onFinished, bool autoStopOnFinished = true)
+        /// <param name="skipStartEntryConditions">是否跳过入口节点的条件判定，默认 <c>false</c>。
+        /// 详见 <see cref="VnStoryManager.StartVnStory"/> 的同名参数——用于「准入已由外部判定」的场景
+        /// （如剧情回顾），避免会话首节点的条件把整段剧情静默拦下。</param>
+        public void Play(string conversationNamePlay, Action onFinished, bool autoStopOnFinished = true,
+            bool skipStartEntryConditions = false)
         {
             if (VnStoryManager.Instance == false)
             {
@@ -131,7 +135,8 @@ namespace Ale.VnFramework
             Subscribe();
 
             // 开始剧情对话
-            VnStoryManager.Instance.StartVnStory(conversationNamePlay, onFinished, autoStopOnFinished);
+            VnStoryManager.Instance.StartVnStory(conversationNamePlay, onFinished, autoStopOnFinished,
+                skipStartEntryConditions);
 
             IsPlaying = true;
             onPlayStarted.Invoke();

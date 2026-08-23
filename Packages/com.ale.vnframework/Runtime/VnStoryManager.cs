@@ -24,19 +24,19 @@ namespace Ale.VnFramework
         /// <summary>
         /// 角色预制体地址。
         /// </summary>
-        public string assetAddress;
+        public string AssetAddress;
         /// <summary>
         /// 角色预制体 资产。
         /// </summary>
-        public GameObject prefabAsset;
+        public GameObject PrefabAsset;
         /// <summary>
         /// 角色预制体 实例。
         /// </summary>
-        public GameObject prefabInstance;
+        public GameObject PrefabInstance;
         /// <summary>
         /// 角色动画组件。
         /// </summary>
-        public VnActorAnimator actorAnimator;
+        public VnActorAnimator ActorAnimator;
     }
     
     /// <summary>
@@ -250,7 +250,7 @@ namespace Ale.VnFramework
         {
             foreach (var kvp in _mapActorAnimator)
             {
-                var instance = kvp.Value.prefabInstance;
+                var instance = kvp.Value.PrefabInstance;
                 if (!instance) continue;
 
                 // 先找可选契约的实现者（本包的 VnActorAnimator 实现了它，第三方组件也可以）。
@@ -321,8 +321,17 @@ namespace Ale.VnFramework
         /// <para>注意此刻 <c>OnConversationEnd</c> 的清理已经执行完毕（角色 / 背景 / 音频均已硬清除），
         /// 因此这次 StopVnStory 实际只淡出 UI 并复位 <c>_isVnStoryStarted</c>，
         /// 好让下一次 StartVnStory 能重新走一遍淡入。</para></param>
+        /// <param name="skipStartEntryConditions">是否<b>跳过入口节点的条件判定</b>，默认 <c>false</c>。
+        /// <para>Dialogue System 的条件挂在<b>节点</b>上、在<b>遍历出边时</b>求值。会话的 START 指向首个真实
+        /// 节点，于是那个节点的条件顺带充当了「本会话的准入门」：条件不成立时（<c>falseConditionAction</c>
+        /// 为 Block）START 就没有任何有效出边，<c>StartConversation</c> 原地返回——
+        /// <b>一行都不播，也不发 OnConversationEnd</b>，调用方只看到「点了没反应」。</para>
+        /// <para>传 <c>true</c> 改为直接以首个真实节点作为入口开播，那道门便不再被求值。用于
+        /// 「剧情回顾」这类<b>准入已由外部判定</b>的场景——能不能看由存档/节点树说了算，
+        /// 不该再受当前存档槽的选择变量影响。</para>
+        /// <para>只影响入口这一步：开播之后各节点出边上的条件（含跨会话链接的分支选择）<b>照常求值</b>。</para></param>
         public void StartVnStory(string conversationName = null, Action onFinished = null,
-            bool autoStopOnFinished = true)
+            bool autoStopOnFinished = true, bool skipStartEntryConditions = false)
         {
             // 会话级的淡入只做一次；重复调用时跳过，但不能连带把下面的「开始对话」也吞掉。
             // 一度是整个方法早退，于是：剧情自然播完后 _isVnStoryStarted 无人清除
@@ -358,7 +367,7 @@ namespace Ale.VnFramework
             _autoStopOnFinished = autoStopOnFinished;
 
             // 开始 指定的对话演出
-            StartStoryConversation(conversationName);
+            StartStoryConversation(conversationName, skipStartEntryConditions);
         }
         
         /// <summary>
@@ -388,18 +397,56 @@ namespace Ale.VnFramework
         /// <summary>
         /// 开始 对话。
         /// </summary>
-        /// <param name="conversationName"></param>
-        private void StartStoryConversation(string conversationName)
+        /// <param name="conversationName">要播放的 对话名称。</param>
+        /// <param name="skipStartEntryConditions">跳过入口节点的条件判定，见
+        /// <see cref="StartVnStory"/> 的同名参数。</param>
+        private void StartStoryConversation(string conversationName, bool skipStartEntryConditions = false)
         {
             if (string.IsNullOrEmpty(conversationName)) return;
-            
+
             // 停止 正在进行的对话
             // StopStoryConversation();
             // 同步 所有外部变量值到Dialogue System。
             SetAllVariablesToDialogueSystem();
-            
+
+            // 指定入口节点开播，Dialogue System 便不会去求值 START 那条出边上的条件。
+            // 解析不出首节点时回落到常规开播：宁可让那道门继续拦着，也不要静默播错位置。
+            var initialEntryId = skipStartEntryConditions ? ResolveFirstEntryId(conversationName) : -1;
+            if (initialEntryId >= 0)
+            {
+                DialogueManager.StartConversation(conversationName, null, null, initialEntryId);
+                return;
+            }
+
             // 开始新的对话
             DialogueManager.StartConversation(conversationName);
+        }
+
+        /// <summary>
+        /// 解析某个会话的<b>首个真实节点</b> id —— 即 START 那条出边所指向的节点。
+        /// </summary>
+        /// <param name="conversationName">对话名称（Conversation Title）。</param>
+        /// <returns>首个真实节点的 id；会话不存在、没有 START、或 START 没有指向本会话内节点的
+        /// 出边时返回 <c>-1</c>（调用方据此回落到常规开播）。</returns>
+        /// <remarks>只认落在<b>本会话内</b>的出边：START 也可以直接链去别的会话，
+        /// 那种情形没有「本会话的首节点」可言，交给 Dialogue System 自己按常规流程处理。</remarks>
+        public static int ResolveFirstEntryId(string conversationName)
+        {
+            if (string.IsNullOrEmpty(conversationName)) return -1;
+
+            var database = DialogueManager.hasInstance ? DialogueManager.masterDatabase : null;
+            var conversation = database != null ? database.GetConversation(conversationName) : null;
+            if (conversation == null) return -1;
+
+            var startEntry = conversation.GetFirstDialogueEntry();
+            if (startEntry == null || startEntry.outgoingLinks == null) return -1;
+
+            foreach (var link in startEntry.outgoingLinks)
+            {
+                if (link != null && link.destinationConversationID == conversation.id)
+                    return link.destinationDialogueID;
+            }
+            return -1;
         }
         
         /// <summary>
@@ -1009,9 +1056,9 @@ namespace Ale.VnFramework
                                 // 这里是全流程中唯一读这两个值的地方，且早于任何倍率写入。
                                 _dialogueTypewriters.Add(new FTypewriterEntry
                                 {
-                                    typewriter = typewriter,
-                                    fullPauseBase = typewriter.fullPauseDuration,
-                                    quarterPauseBase = typewriter.quarterPauseDuration,
+                                    Typewriter = typewriter,
+                                    FullPauseBase = typewriter.fullPauseDuration,
+                                    QuarterPauseBase = typewriter.quarterPauseDuration,
                                 });
                             else
                                 Debug.LogWarning($"剧情演出 >> 字幕面板 '{panel.name}' 的字幕文本组件上没有打字机组件，无法设置打字机速度。" +
@@ -1122,9 +1169,9 @@ namespace Ale.VnFramework
         /// </summary>
         private struct FTypewriterEntry
         {
-            public AbstractTypewriterEffect typewriter;
-            public float fullPauseBase;
-            public float quarterPauseBase;
+            public AbstractTypewriterEffect Typewriter;
+            public float FullPauseBase;
+            public float QuarterPauseBase;
         }
 
         // 如果你只需要快速访问所有的打字机组件。
@@ -1170,11 +1217,11 @@ namespace Ale.VnFramework
 
             foreach (var entry in _dialogueTypewriters)
             {
-                var tw = entry.typewriter;
+                var tw = entry.Typewriter;
                 if (!tw) continue;
                 tw.charactersPerSecond = cps;
-                tw.fullPauseDuration = entry.fullPauseBase / rate;
-                tw.quarterPauseDuration = entry.quarterPauseBase / rate;
+                tw.fullPauseDuration = entry.FullPauseBase / rate;
+                tw.quarterPauseDuration = entry.QuarterPauseBase / rate;
             }
         }
 
@@ -1188,7 +1235,7 @@ namespace Ale.VnFramework
         {
             foreach (var entry in _dialogueTypewriters)
             {
-                if (entry.typewriter && entry.typewriter.isPlaying) entry.typewriter.Stop();
+                if (entry.Typewriter && entry.Typewriter.isPlaying) entry.Typewriter.Stop();
             }
         }
 
@@ -1197,7 +1244,7 @@ namespace Ale.VnFramework
         {
             foreach (var entry in _dialogueTypewriters)
             {
-                if (entry.typewriter && entry.typewriter.isPlaying) return true;
+                if (entry.Typewriter && entry.Typewriter.isPlaying) return true;
             }
             return false;
         }
@@ -1452,8 +1499,8 @@ namespace Ale.VnFramework
             // 已经加载着同一个预制体：不重新实例化，只更新锚点与动画状态。
             // 连续几行同一个人说话是最常见的写法，每行都重新实例化会让头像逐行闪一下，
             // 也会让 Spine / Live2D 的循环动画不断从头拉起。
-            if (_dialogueHeadPrefabLoadData.prefabInstance &&
-                _dialogueHeadPrefabLoadData.assetAddress == headAssetPrefabAddress)
+            if (_dialogueHeadPrefabLoadData.PrefabInstance &&
+                _dialogueHeadPrefabLoadData.AssetAddress == headAssetPrefabAddress)
             {
                 ReparentDialogueHeadPrefab(anchor);
                 SetDialogueHeadPrefabAnim(_dialogueHeadPrefabLoadData, headAnimParam);
@@ -1498,10 +1545,10 @@ namespace Ale.VnFramework
 
                 var loadData = new FActorPrefabLoadData
                 {
-                    assetAddress = headAssetPrefabAddress,
-                    prefabAsset = headPrefab,
-                    prefabInstance = headPrefabInstance,
-                    actorAnimator = headAnimator
+                    AssetAddress = headAssetPrefabAddress,
+                    PrefabAsset = headPrefab,
+                    PrefabInstance = headPrefabInstance,
+                    ActorAnimator = headAnimator
                 };
                 _dialogueHeadPrefabLoadData = loadData;
 
@@ -1524,12 +1571,12 @@ namespace Ale.VnFramework
         /// <param name="headAnimParam">头像动画组</param>
         private void InitDialogueHeadPrefab(FActorPrefabLoadData loadData, string headAnimParam)
         {
-            if (!loadData.prefabInstance) return;
+            if (!loadData.PrefabInstance) return;
 
-            if (!loadData.actorAnimator)
+            if (!loadData.ActorAnimator)
             {
                 // 静态头像：激活即完成
-                loadData.prefabInstance.SetActive(true);
+                loadData.PrefabInstance.SetActive(true);
                 return;
             }
 
@@ -1537,13 +1584,13 @@ namespace Ale.VnFramework
             // ExecuteInit 写的是世界变换（transform.position / eulerAngles / localScale），
             // 对 UI 预制体来说那会把它从 Canvas 的布局里拽出去。头像的位置尺寸应当由预制体
             // 自己的 RectTransform 决定，剧本不该、也没有字段去干预它。
-            var headTrans = loadData.prefabInstance.transform;
+            var headTrans = loadData.PrefabInstance.transform;
 
             // 动画组：字段缺失（null）时传 null，表示沿用预制体自身配置的初始状态；
             // 字段存在但为空时传空数组，表示明确不进入任何状态。判据与 InitActorPrefab 一致
             // ——ParseStringArray 对两者都返回空数组，不看原串就区分不出来。
             ParseStringArray(headAnimParam, out var toStateArray);
-            loadData.actorAnimator.ExecuteInit(headTrans.position, headTrans.eulerAngles, headTrans.localScale,
+            loadData.ActorAnimator.ExecuteInit(headTrans.position, headTrans.eulerAngles, headTrans.localScale,
                 headAnimParam == null ? null : toStateArray);
         }
 
@@ -1554,12 +1601,12 @@ namespace Ale.VnFramework
         /// <param name="headAnimParam">头像动画组</param>
         private void SetDialogueHeadPrefabAnim(FActorPrefabLoadData loadData, string headAnimParam)
         {
-            if (!loadData.prefabInstance) return;
+            if (!loadData.PrefabInstance) return;
 
             // 实例可能还停在未激活状态（上一行走的是延迟显示，或延时尚未到点）
-            if (!loadData.prefabInstance.activeSelf) loadData.prefabInstance.SetActive(true);
+            if (!loadData.PrefabInstance.activeSelf) loadData.PrefabInstance.SetActive(true);
 
-            if (!loadData.actorAnimator) return;
+            if (!loadData.ActorAnimator) return;
 
             // 字段缺失时什么都不做——沿用当前状态。
             // ⚠️ 不能在这里对 null 传空数组：SwitchStateArray 传空数组会把渲染器引用计数减到 0，
@@ -1568,7 +1615,7 @@ namespace Ale.VnFramework
             if (headAnimParam == null) return;
 
             ParseStringArray(headAnimParam, out var toStateArray);
-            loadData.actorAnimator.SwitchStateArray(toStateArray);
+            loadData.ActorAnimator.SwitchStateArray(toStateArray);
         }
 
         /// <summary>
@@ -1577,7 +1624,7 @@ namespace Ale.VnFramework
         /// <param name="anchor"></param>
         private void ReparentDialogueHeadPrefab(Transform anchor)
         {
-            var instance = _dialogueHeadPrefabLoadData.prefabInstance;
+            var instance = _dialogueHeadPrefabLoadData.PrefabInstance;
             if (!instance || !anchor) return;
             if (instance.transform.parent == anchor) return;
 
@@ -1595,18 +1642,18 @@ namespace Ale.VnFramework
             _dialogueHeadPrefabDelayTween.Kill();
 
             var loadData = _dialogueHeadPrefabLoadData;
-            if (string.IsNullOrEmpty(loadData.assetAddress)) return;
+            if (string.IsNullOrEmpty(loadData.AssetAddress)) return;
 
             // 先清空记录：下面的销毁可能带延时，期间不应再被任何路径当作「当前头像」使用
             _dialogueHeadPrefabLoadData = default;
 
-            var assetAddress = loadData.assetAddress;
-            var instance = loadData.prefabInstance;
+            var assetAddress = loadData.AssetAddress;
+            var instance = loadData.PrefabInstance;
 
-            if (loadData.actorAnimator)
+            if (loadData.ActorAnimator)
             {
                 // 交给动画组件收尾（淡出、粒子播完再回收），完成后卸载资源
-                loadData.actorAnimator.ExecuteDestroy(() => UnloadAsset(assetAddress));
+                loadData.ActorAnimator.ExecuteDestroy(() => UnloadAsset(assetAddress));
                 return;
             }
 
@@ -2162,7 +2209,7 @@ namespace Ale.VnFramework
                     SetActorPrefab(actorPrefabLoadData, actorPosParam, actorRotateParam, actorScaleParam, actorAnimParam);
                     return;
                 }
-                else if (actorPrefabLoadData.assetAddress == actorAssetPrefabAddress)
+                else if (actorPrefabLoadData.AssetAddress == actorAssetPrefabAddress)
                 {
                     // 已经加载过，立即设置
                     // 无 过渡动画
@@ -2209,10 +2256,10 @@ namespace Ale.VnFramework
                 // 记录 角色预制体
                 var actorAnimsLoadData = new FActorPrefabLoadData
                 {
-                    assetAddress = actorAssetPrefabAddress,
-                    prefabAsset = actorPrefab,
-                    prefabInstance = actorPrefabInstance,
-                    actorAnimator = actorAnimator
+                    AssetAddress = actorAssetPrefabAddress,
+                    PrefabAsset = actorPrefab,
+                    PrefabInstance = actorPrefabInstance,
+                    ActorAnimator = actorAnimator
                 };
                 _mapActorAnimator[actorFieldTitleName] = actorAnimsLoadData;
                 
@@ -2255,12 +2302,12 @@ namespace Ale.VnFramework
             _mapActorAnimator.Remove(actorFieldTitleName);
 
             // 提出到局部变量：闭包捕获结构体字段会把整个结构体一起装进闭包类
-            var assetAddress = actorPrefabLoadData.assetAddress;
+            var assetAddress = actorPrefabLoadData.AssetAddress;
 
-            if (actorPrefabLoadData.actorAnimator)
+            if (actorPrefabLoadData.ActorAnimator)
             {
                 // 销毁 角色预制体的实例。延迟激活、尚未激活的会直接销毁。
-                actorPrefabLoadData.actorAnimator.ExecuteDestroy(() =>
+                actorPrefabLoadData.ActorAnimator.ExecuteDestroy(() =>
                 {
                     // 卸载 角色预制体资源
                     UnloadAsset(assetAddress);
@@ -2271,7 +2318,7 @@ namespace Ale.VnFramework
             // 无 VnActorAnimator 的普通预制体：自己销毁实例并卸载资源。
             // 此前这里是 ActorAnimator?.ExecuteDestroy(...)，组件缺失时整条链被跳过
             // ——实例永不销毁、UnloadAsset 永不调用（Addressable 句柄泄漏），却已经从映射表里摘掉了。
-            var instance = actorPrefabLoadData.prefabInstance;
+            var instance = actorPrefabLoadData.PrefabInstance;
 
             // 实例已不在或未激活：直接销毁，没有在途表现要收尾
             if (!instance || !instance.activeSelf)
@@ -2319,10 +2366,10 @@ namespace Ale.VnFramework
             string actorAnimParam
         )
         {
-            if (!actorPrefabLoadData.prefabInstance) return;
+            if (!actorPrefabLoadData.PrefabInstance) return;
 
             // 获取 角色预制体 实例的 Transform
-            var actorTrans = actorPrefabLoadData.prefabInstance.transform;
+            var actorTrans = actorPrefabLoadData.PrefabInstance.transform;
 
             // 角色位置、旋转、缩放。默认 为 预制体 当前值
             ParseVector3AndFloat(actorPosParam, out var toPos, out var _, actorTrans.position);
@@ -2333,10 +2380,10 @@ namespace Ale.VnFramework
             // ——ParseStringArray 对两者都返回空数组，不看原串就区分不出来。
             ParseStringArray(actorAnimParam, out var toStateArray);
 
-            if (actorPrefabLoadData.actorAnimator)
+            if (actorPrefabLoadData.ActorAnimator)
             {
                 // 交给动画组件：它会落位、激活，并在动画播放器就绪后淡入与切换状态
-                actorPrefabLoadData.actorAnimator.ExecuteInit(
+                actorPrefabLoadData.ActorAnimator.ExecuteInit(
                     toPos, toRot, toScale, actorAnimParam == null ? null : toStateArray);
                 return;
             }
@@ -2346,11 +2393,11 @@ namespace Ale.VnFramework
             // 此前这整段都包在组件判空里，而实例在 LoadActorPrefab 中被 SetActive(false)，
             // 于是缺组件的预制体加载后没有任何代码把它激活回来——两个 Demo 特效正是这种。
             // 先禁用再落位再激活：让粒子等由 OnEnable 驱动的组件从头开始，也保证不会在旧位置上被渲染一帧。
-            if (actorPrefabLoadData.prefabInstance.activeSelf)
-                actorPrefabLoadData.prefabInstance.SetActive(false);
+            if (actorPrefabLoadData.PrefabInstance.activeSelf)
+                actorPrefabLoadData.PrefabInstance.SetActive(false);
             actorTrans.SetPositionAndRotation(toPos, Quaternion.Euler(toRot));
             actorTrans.localScale = toScale;
-            actorPrefabLoadData.prefabInstance.SetActive(true);
+            actorPrefabLoadData.PrefabInstance.SetActive(true);
         }
         
         /// <summary>
@@ -2370,37 +2417,37 @@ namespace Ale.VnFramework
             string actorAnimParam
         )
         {
-            if (!actorPrefabLoadData.prefabInstance) return;
+            if (!actorPrefabLoadData.PrefabInstance) return;
 
             // 获取 角色预制体 实例的 Transform
-            var actorTrans = actorPrefabLoadData.prefabInstance.transform;
+            var actorTrans = actorPrefabLoadData.PrefabInstance.transform;
 
             // 设置 角色预制体 实例的位置、缩放、动画
-            if (actorPrefabLoadData.actorAnimator)
+            if (actorPrefabLoadData.ActorAnimator)
             {
                 // 完成之前的 位置、缩放 插值动画
-                actorPrefabLoadData.actorAnimator.CompleteTransformTween();
+                actorPrefabLoadData.ActorAnimator.CompleteTransformTween();
 
                 // 角色位置。默认 为 预制体 当前位置
                 if (actorPosParam != null)
                 {
                     // 位置变化速度
                     ParseVector3AndFloat(actorPosParam, out var toPos, out var posSpeed, actorTrans.position, 1f);
-                    actorPrefabLoadData.actorAnimator.SetToPosition(toPos, posSpeed);
+                    actorPrefabLoadData.ActorAnimator.SetToPosition(toPos, posSpeed);
                 }
                 // 角色旋转。默认 为 预制体 当前旋转
                 if (actorRotateParam != null)
                 {
                     // 旋转变化速度
                     ParseVector3AndFloat(actorRotateParam, out var toRot, out var rotSpeed, actorTrans.rotation.eulerAngles, 1f);
-                    actorPrefabLoadData.actorAnimator.SetToRotation(toRot, rotSpeed);
+                    actorPrefabLoadData.ActorAnimator.SetToRotation(toRot, rotSpeed);
                 }
                 // 角色缩放。默认 为 预制体 当前缩放
                 if (actorScaleParam != null)
                 {
                     // 缩放变化速度
                     ParseVector3AndFloat(actorScaleParam, out var toScale, out var scaleSpeed, actorTrans.localScale, 1f);
-                    actorPrefabLoadData.actorAnimator.SetToScale(toScale, scaleSpeed);
+                    actorPrefabLoadData.ActorAnimator.SetToScale(toScale, scaleSpeed);
                 }
 
                 // 角色动画组
@@ -2408,7 +2455,7 @@ namespace Ale.VnFramework
                 {
                     // 切换动画组
                     ParseStringArray(actorAnimParam, out var toStateArray);
-                    actorPrefabLoadData.actorAnimator.SwitchStateArray(toStateArray);
+                    actorPrefabLoadData.ActorAnimator.SwitchStateArray(toStateArray);
                 }
                 return;
             }
@@ -2417,8 +2464,8 @@ namespace Ale.VnFramework
             // 这条路不是边角——对话行只要没写 ActorNPrefab 字段，就会走到 SetActorPrefab
             // （Field.LookupValue 对缺失字段返回 null，`== ""` 判定为假），
             // 即「保留该槽位的角色、只改位姿」正是最常见的写法。
-            if (!actorPrefabLoadData.prefabInstance.activeSelf)
-                actorPrefabLoadData.prefabInstance.SetActive(true);
+            if (!actorPrefabLoadData.PrefabInstance.activeSelf)
+                actorPrefabLoadData.PrefabInstance.SetActive(true);
             if (actorPosParam != null)
             {
                 ParseVector3AndFloat(actorPosParam, out var toPos, out var _, actorTrans.position, 1f);
@@ -2449,20 +2496,20 @@ namespace Ale.VnFramework
             foreach (var kvp in _mapActorAnimator)
             {
                 var data = kvp.Value;
-                if (data.actorAnimator)
+                if (data.ActorAnimator)
                 {
                     // 有 VnActorAnimator，尝试淡出
-                    bool handled = data.actorAnimator.FadeOut();
-                    if (!handled && data.prefabInstance)
+                    bool handled = data.ActorAnimator.FadeOut();
+                    if (!handled && data.PrefabInstance)
                     {
                         // VnActorAnimator 无法淡出（无Spine/粒子），降级为设置非激活
-                        data.prefabInstance.SetActive(false);
+                        data.PrefabInstance.SetActive(false);
                     }
                 }
-                else if (data.prefabInstance)
+                else if (data.PrefabInstance)
                 {
                     // 普通预制体，无法淡出，设置非激活
-                    data.prefabInstance.SetActive(false);
+                    data.PrefabInstance.SetActive(false);
                 }
             }
         }
@@ -2477,20 +2524,20 @@ namespace Ale.VnFramework
             foreach (var kvp in _mapActorAnimator)
             {
                 var data = kvp.Value;
-                if (data.actorAnimator)
+                if (data.ActorAnimator)
                 {
                     // 有 VnActorAnimator，尝试淡入
-                    bool handled = data.actorAnimator.FadeIn();
-                    if (!handled && data.prefabInstance)
+                    bool handled = data.ActorAnimator.FadeIn();
+                    if (!handled && data.PrefabInstance)
                     {
                         // VnActorAnimator 无法淡入（无Spine/粒子），降级为设置激活
-                        data.prefabInstance.SetActive(true);
+                        data.PrefabInstance.SetActive(true);
                     }
                 }
-                else if (data.prefabInstance)
+                else if (data.PrefabInstance)
                 {
                     // 普通预制体，直接激活
-                    data.prefabInstance.SetActive(true);
+                    data.PrefabInstance.SetActive(true);
                 }
             }
         }
