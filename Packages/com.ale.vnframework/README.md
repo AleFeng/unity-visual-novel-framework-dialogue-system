@@ -356,15 +356,19 @@ string json = JsonUtility.ToJson(data);                          // 或 ES3 / �
 
 // 读档时
 VnStoryManager.Instance.LoadSaveData(JsonUtility.FromJson<VnStorySaveData>(json));
-VnStoryManager.Instance.Playback.NotifyStateChanged();           // 让按钮刷新图标
+// 1.6.1 起按钮图标由 LoadSaveData 自动刷新，不必再手动调 NotifyStateChanged()
 
 // 开新游戏
 VnStoryManager.Instance.ResetAll();
 ```
 
 沿用 `com.ale.toolkit` 的 `ISaveable` 四条契约：**取时深拷贝**、**载入是覆盖而非合并**、
-**容忍 `null` 与脏数据**、**三个方法都不触发变更事件**（所以读档后要自己调
-`NotifyStateChanged()` 刷界面）。
+**容忍 `null` 与脏数据**、**三个方法都不触发变更事件**。
+
+> 最后一条指的是**玩法**事件，为的是读档时不层层级联。**1.6.1 起纯视图刷新是个例外**：
+> `LoadSaveData` 与 `ResetAll` 会自动调一次 `Playback.NotifyStateChanged()`，
+> 按钮图标不再需要调用方手动刷新。该事件只被按钮用来换图，不会回流进任何玩法逻辑。
+> 直接调底层的 `Playback.ApplySettings()` / `ResetToDefaults()` 则仍需自己刷。
 
 > 本类只实现非泛型的 `ISaveable`，不实现 `ISaveable<TState>`——后者是 `List<TState>` 形状、
 > 为集合型系统设计，而这里是「一个设置块 + 一份已读位图」的单体聚合。
@@ -744,7 +748,7 @@ public class VnPlaybackController : MonoBehaviour
     public VnPlaybackSettingsData GetSettings();
     public void ApplySettings(VnPlaybackSettingsData data);   // 不触发 StateChanged
     public void ResetToDefaults();                            // 同上
-    public void NotifyStateChanged();                         // 读档后手动刷一次界面
+    public void NotifyStateChanged();                         // 主动刷一次界面（读档由管理器自动调用）
     public void SetUiHidden(bool hidden);                     // 由 VnUiHider 调用
 }
 ```

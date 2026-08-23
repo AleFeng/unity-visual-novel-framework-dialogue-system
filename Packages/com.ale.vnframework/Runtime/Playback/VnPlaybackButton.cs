@@ -58,6 +58,7 @@ namespace Ale.VnFramework
         [SerializeField] private VnUiHider uiHider;
 
         private VnPlaybackController _controller; // Inspector 没挂时运行时在 VnStoryManager 上找
+        private VnPlaybackController _boundController; // 当前订阅到的那一个，用于识别「换了控制器」
         private bool _pressed; // 快进按钮按下状态，按下时 BeginFastForward，松开时 EndFastForward
         
         /// <summary>
@@ -95,22 +96,54 @@ namespace Ale.VnFramework
 
         private void OnEnable()
         {
-            var c = Controller;
-            if (c)
-            {
-                c.StateChanged -= Refresh;
-                c.StateChanged += Refresh;
-            }
+            Bind();
+            Refresh();
+        }
+
+        /// <summary>
+        /// 再绑一次。<c>OnEnable</c> 可能跑在 <see cref="VnStoryManager"/> 的 <c>Awake</c> 之前
+        /// ——这套 UI 由 Dialogue System 运行时实例化，时机不由本包决定；那一刻
+        /// <c>Instance</c> 还是 null，订阅建不起来，而 <c>OnEnable</c> 整局只跑这一次。
+        /// <c>Start</c> 必定晚于场上所有 <c>Awake</c>，放在这里补一次即可兜住。
+        /// </summary>
+        private void Start()
+        {
+            Bind();
             Refresh();
         }
 
         private void OnDisable()
         {
-            var c = Controller;
-            if (c) c.StateChanged -= Refresh;
+            Unbind();
 
             // 被禁用时若还按着快进，PointerUp 永远收不到，倍率会一直卡在 5。
             ReleaseIfHolding();
+        }
+
+        /// <summary>
+        /// 把图标刷新挂到当前的控制器上。已经挂在同一个上时什么都不做。
+        ///
+        /// <para>本方法可以反复调用，<see cref="Refresh"/> 每次都会先走一遍。这样两种情况能自愈：
+        /// <c>OnEnable</c> 那一刻 <see cref="VnStoryManager.Instance"/> 还不存在（订阅没建立），
+        /// 以及管理器被重建而这套 UI 活了下来（订阅还留在已销毁的旧控制器上）。
+        /// 本按钮条是字幕面板的兄弟节点、不随对话开关激活，<c>OnEnable</c> 整局只跑一次，
+        /// 单靠它兜不住这两种情况。</para>
+        /// </summary>
+        private void Bind()
+        {
+            var c = Controller;
+            if (c == _boundController) return;
+
+            if (_boundController) _boundController.StateChanged -= Refresh;
+            _boundController = c;
+            if (_boundController) _boundController.StateChanged += Refresh;
+        }
+
+        /// <summary>断开图标刷新的订阅。</summary>
+        private void Unbind()
+        {
+            if (_boundController) _boundController.StateChanged -= Refresh;
+            _boundController = null;
         }
 
         #region 指针事件
@@ -169,6 +202,11 @@ namespace Ale.VnFramework
         public void Refresh()
         {
             if (!targetImage) return;
+
+            // 每次刷新都顺带确认订阅还挂在当前控制器上（见 Bind 的说明）。
+            // 委托是不可变的，在事件回调里增删订阅不会影响本次正在进行的派发。
+            Bind();
+
             var c = Controller;
             if (!c) return;
 

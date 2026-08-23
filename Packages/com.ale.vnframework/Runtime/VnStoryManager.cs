@@ -157,8 +157,10 @@ namespace Ale.VnFramework
         /// 存档里没有、内存里有的条目不会残留。
         ///
         /// <para>接受 <c>null</c> 与字段缺失的脏数据（跳过而非抛异常），且<b>不触发任何变更事件</b>——
-        /// 这是 <see cref="ISaveable"/> 一族的契约。界面刷新由调用方在载入完成后自行触发，
-        /// 按钮条可调 <c>Playback.NotifyStateChanged()</c>。</para>
+        /// 这是 <see cref="ISaveable"/> 一族的契约——指的是**玩法**事件，避免读档时层层级联。
+        /// <b>1.6.1 起，纯视图刷新是个例外</b>：本方法会在写入设置后自动调一次
+        /// <c>Playback.NotifyStateChanged()</c>，按钮图标不必再由调用方手动刷新。
+        /// 该事件只被按钮用来换图，不会回流进任何玩法逻辑。</para>
         /// <para>覆写点：宿主子类在 base 之后回填自己的数据（典型是分支选择变量）。
         /// ⚠️ base 在剧本指纹不一致时会提前 return（丢弃已读记录），但那只针对按节点 ID
         /// 寻址的已读位图——按名字寻址的数据不受影响，子类应在 base 返回后照常回填。</para>
@@ -171,7 +173,15 @@ namespace Ale.VnFramework
                 return;
             }
 
-            if (Playback) Playback.ApplySettings(data.settings);
+            if (Playback)
+            {
+                Playback.ApplySettings(data.settings);
+                // ⚠️ 通知必须紧跟在写入之后，不能挪到方法末尾——下面的剧本指纹分支会提前 return，
+                // 而设置在那之前就已经生效了，挂在尾部会让「指纹不一致」时按钮停在旧图标上。
+                // 按钮只读设置项（自动播放 / 档位 / 快进 / 新对话停止），与后面的已读记录无关，
+                // 所以此刻通知取到的状态已经是完整的。
+                Playback.NotifyStateChanged();
+            }
 
             // 剧本被整库重导入过的话，会话与节点 ID 已重编号，位图会静默错位——
             // 玩家会看到没读过的剧情被当作已读跳过。宁可丢掉记录也不能错位。
@@ -194,14 +204,20 @@ namespace Ale.VnFramework
 
         /// <summary>
         /// 清空本系统的全部运行时状态，回到初始态（开新游戏 / 读档前清场）。
-        /// 同样<b>不触发变更事件</b>。
+        /// 同样<b>不触发玩法变更事件</b>；与 <see cref="LoadSaveData"/> 一致，
+        /// 1.6.1 起会自动刷新一次按钮图标。
         /// <para>覆写点：宿主子类在 base 之后清掉自己的数据。⚠️ <see cref="LoadSaveData"/>
         /// 收到 null 时会调本方法，覆写里不要再反过来调 LoadSaveData，会成环。</para>
         /// </summary>
         public virtual void ResetAll()
         {
             ReadHistory.ClearAll();
-            if (Playback) Playback.ResetToDefaults();
+            if (Playback)
+            {
+                Playback.ResetToDefaults();
+                // 与 LoadSaveData 同理：ResetToDefaults 自己按契约不发事件，由这里补一次视图刷新。
+                Playback.NotifyStateChanged();
+            }
             SetPlaybackRate(1f, 1f);
         }
         #endregion
