@@ -46,6 +46,9 @@ MonoBehaviour:
   - functionName: "Ale \u6761\u4EF6/Fs \u65F6\u95F4/AleCond_Fs_Time_Year"
     parameters: 020000000200000001000000
     returnValue: 1
+  - functionName: "Ale \u6761\u4EF6/Vn/AleCond_Vn_StoryChoiceIs"
+    parameters: 020000000200000001000000
+    returnValue: 1
   - functionName: "Ale \u6761\u4EF6/\u52A8\u753B\u6A21\u62DF\u5668/AleCond_AnimSim_ActionProgress"
     parameters: 020000000200000001000000
     returnValue: 1
