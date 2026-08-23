@@ -557,7 +557,7 @@ public class VnStoryManager : ToolkitMonoSingleton<VnStoryManager>
 
 | 成员 | 说明 |
 |---|---|
-| `void StartVnStory(string conversationName = null)` | 开始演出。UI / 背景 / 角色的**淡入只做一次**（重复调用会跳过），但传入的对话名**始终生效**——已在播放时再调一次即切到新对话。<br>⚠️ 1.2.0 之前是整个方法早退，导致剧情自然播完后再播任何一段都是静默空操作。 |
+| `void StartVnStory(string conversationName = null, Action onFinished = null, bool autoStopOnFinished = true)` | 开始演出。UI / 背景 / 角色的**淡入只做一次**（重复调用会跳过），但传入的对话名**始终生效**——已在播放时再调一次即切到新对话（此时上一次登记的 `onFinished` 会被顶掉并告警）。<br>`onFinished`：该段对话播放完成后触发；**自然播完与中途 `StopVnStory` 都会触发**，两者经 DS 同一个 `OnConversationEnd` 收口、框架无从区分。经 `OnConversationEnd` 派发，覆写该方法的子类**必须调 base**。<br>`autoStopOnFinished`（1.6.1 起，默认 `true`）：播完后自动 `StopVnStory()`。回调里若接着开了下一段对话则自动跳过，不会把新剧情立刻淡出。传 `false` 用于连播。<br>⚠️ 1.2.0 之前是整个方法早退，导致剧情自然播完后再播任何一段都是静默空操作。 |
 | `void StopVnStory(bool clearAllData = true)` | 停止演出。⚠️ 停对话发生在 UI 淡出的**完成回调**里，不是同步；且仅当 `clearAllData` 为 true 时才停。 |
 | `string[] GetAllConversationName()` | 取剧情库中全部对话名。 |
 | `void RegisterGameplaySystem(string fieldTitle, Action<string> callback)` | 按**任意**字段标题接管演出流程：节点上出现该标题且值非空时，回调收到其 `Value`。重复注册会覆盖并告警。 |

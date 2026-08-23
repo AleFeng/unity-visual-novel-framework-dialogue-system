@@ -9,6 +9,60 @@
 > `PixelCrushers.DialogueSystem.VnStoryFramework` → `Ale.VnFramework`。脚本 `.meta` 的 GUID 全部保留，
 > 既有场景与预制体的组件引用不受影响。**升级前请先读下方「⚠ 前置条件」。**
 
+## [1.6.1] - 2026-08-23
+
+给 `StartVnStory` 补上「这段播完之后怎么办」：一个完成回调，和一个是否自动收场的开关。
+**含一处行为变更**，见下方「变更」。
+
+### 新增
+
+- **`StartVnStory` 新增两个可选参数**，既有调用点无需改动：
+
+  ```csharp
+  public void StartVnStory(string conversationName = null, Action onFinished = null,
+      bool autoStopOnFinished = true)
+  ```
+
+  - `onFinished`：这段对话**播放完成后**触发。
+  - `autoStopOnFinished`：播完后是否自动调用 `StopVnStory()`，默认 `true`。
+    传 `false` 用于「一段接一段连播」——UI 与背景留在场上，由调用方自行决定何时收场。
+  - 回调里若接着开了下一段对话，自动收场会**自动跳过**，不会把刚起头的新剧情立刻淡出。
+  - ⚠️ 回调经 `OnConversationEnd` 派发，**覆写该方法的子类必须调用 base**，否则回调不会触发
+    （与该方法既有的「不调 base 会造成句柄泄漏」是同一条约定）。
+  - 只在传了对话名时才有意义：`StartVnStory()` 不带对话名却传了 `onFinished` 会告警一次，
+    因为此时没有任何「播放完成」可等，回调永远不会兑现。
+
+### 变更
+
+- **剧情自然播完现在会自动收场**——`autoStopOnFinished` 默认 `true` 的直接后果。
+  此前自然结束**不经过** `StopVnStory`，`_isVnStoryStarted` 播完一次后就永远留在 `true`，
+  之后每一段剧情都不再走淡入；现在播完即淡出 UI 并复位状态，下一段能重新淡入。
+  要保持旧表现的调用点，显式传 `autoStopOnFinished: false`。
+
+### 三条必须知道的语义
+
+**① 回调分不清「播完」与「被打断」。** 自然播完与中途 `StopVnStory` 都经 Dialogue System
+同一个 `OnConversationEnd` 收口，框架层面无从区分——两种情况都会触发 `onFinished`。
+需要区分就在调用 `StopVnStory` 之前自行置标记。
+
+**② 自动收场时，角色与背景其实已经被硬清除了。** 收尾挂在 `OnConversationEnd` 的**末尾**，
+而同方法前半段的 `ClearAllActors()` / `ClearAllBackground()` 已经执行完毕，
+所以这次 `StopVnStory` 实际只淡出 UI 并复位状态。挂到前面看似能让角色淡出，
+实则紧随其后的那些 Clear 会把正在淡出的对象当场销毁，比现在更糟。
+
+**③ 回调运行在 `ConversationController.Close()` 内部，异常必须就地吞掉。**
+收尾是 `Close()` 发出的 `BroadcastMessage` 的一环，宿主回调抛出的异常若穿出去，
+会让 `Close()` 的后半段（把本次会话从活动列表移除）不再执行，Dialogue System 就此进入坏状态。
+故 `onFinished` 外面包了 try/catch：异常记日志，不阻断收尾。
+判断「结束的是不是本次这段」用的是 `DialogueManager.lastConversationEnded`——
+它由 `Close()` 在广播的**前一行**写入，此刻取到的必然是刚结束的那段；
+`OnConversationEnd` 对任何对话都会触发，包括剧本链去的其它对话与别处启动的联动对话。
+
+### 文档
+
+- 根 README 的安装章节补上两个前置依赖的 git URL（`com.ale.toolkit` 与
+  `com.ale.animsimulatorsystem`），省得使用者自己翻仓库地址。
+
 ## [1.6.0] - 2026-08-21
 
 ### 新增
