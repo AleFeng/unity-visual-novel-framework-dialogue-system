@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using UnityEngine;
 using UnityEngine.Events;
@@ -86,6 +87,22 @@ namespace Ale.VnFramework
         /// <param name="conversationNamePlay">要播放的 剧情对话名称。</param>
         public void Play(string conversationNamePlay)
         {
+            Play(conversationNamePlay, null);
+        }
+
+        /// <summary>
+        /// 开始 剧情演出，并登记播放完成后的回调与收场方式。
+        /// </summary>
+        /// <param name="conversationNamePlay">要播放的 剧情对话名称。</param>
+        /// <param name="onFinished">这段对话<b>播放完成后</b>的回调，直通
+        /// <see cref="VnStoryManager.StartVnStory"/>：由 Manager 按「结束的正是这段」认领，
+        /// 自然播完与中途停止都会触发。
+        /// <para>与本组件的 <see cref="OnPlayEnded"/> 是两条路：后者由 Dialogue System 的
+        /// <c>conversationEnded</c> 驱动，面向 Inspector 配置；前者面向调用方按次传入。</para></param>
+        /// <param name="autoStopOnFinished">播放完成后是否自动 <c>StopVnStory</c>（淡出 UI/背景），
+        /// 默认 <c>true</c>。传 <c>false</c> 用于一段接一段连播，由调用方决定何时收场。</param>
+        public void Play(string conversationNamePlay, Action onFinished, bool autoStopOnFinished = true)
+        {
             if (VnStoryManager.Instance == false)
             {
                 Debug.LogWarning("[VnStoryPlayer] Play >> 场景中不存在 VnStoryManager 实例，无法播放剧情演出。");
@@ -108,7 +125,7 @@ namespace Ale.VnFramework
             Subscribe();
 
             // 开始剧情对话
-            VnStoryManager.Instance.StartVnStory(conversationNamePlay);
+            VnStoryManager.Instance.StartVnStory(conversationNamePlay, onFinished, autoStopOnFinished);
 
             IsPlaying = true;
             onPlayStarted.Invoke();
