@@ -9,6 +9,61 @@
 > `PixelCrushers.DialogueSystem.VnStoryFramework` → `Ale.VnFramework`。脚本 `.meta` 的 GUID 全部保留，
 > 既有场景与预制体的组件引用不受影响。**升级前请先读下方「⚠ 前置条件」。**
 
+## [1.6.2] - 2026-08-24
+
+两件事：能跳过「会话入口条件」开播了；多了一个判断剧情选项的判定器。
+
+### 新增
+
+- **`StartVnStory` 新增第四个可选参数 `skipStartEntryConditions`**（默认 `false`，既有调用点无需改动）：
+
+  ```csharp
+  public void StartVnStory(string conversationName = null, Action onFinished = null,
+      bool autoStopOnFinished = true, bool skipStartEntryConditions = false)
+  ```
+
+  Dialogue System 的条件挂在**节点**上、在**遍历出边时**求值。会话的 START 指向首个真实节点，
+  于是那个节点的条件顺带充当了「本会话的准入门」：条件不成立时（`falseConditionAction` 为 Block）
+  START 没有任何有效出边，`StartConversation` 原地返回——**一行都不播，也不发 `OnConversationEnd`**，
+  调用方只看到「点了没反应」，等待中的完成回调也永远不会兑现。
+
+  传 `true` 改为直接以**首个真实节点**作为入口开播（`initialDialogueEntryID`），那道门便不再被求值。
+  用于「剧情回顾」这类**准入已由外部判定**的场景——能不能看由存档说了算，不该再受当前存档槽的选择变量影响。
+  **只影响入口这一步**：开播之后各节点出边上的条件（含跨会话链接的分支选择）照常求值。
+
+  配套：`VnStoryPlayer.Play(string, Action, bool, bool)` 同步加参数直通；新增
+  `VnStoryManager.ResolveFirstEntryId(string)`（静态）解析会话首个真实节点的 id，解析不出返回 `-1`
+  并由调用方回落到常规开播 —— 宁可让那道门继续拦着，也不静默播错位置。
+
+- **判定器 `Vn.StoryChoiceIs`**：判断某个分支点当时选了第几项。参数
+  `dialogue`（对话编号，String，**不含变量名前缀**）、`op`（比较符下拉，复用 toolkit 的 `ConditionCompare`）、
+  `index`（选项序号，Int，**1 起**）。数据来自宿主实现并注册的新接口
+  **`IVnStoryChoiceSource { int GetChoice(string dialogueNumber); }`**
+  （`VnConditionSources.RegisterService<IVnStoryChoiceSource>(impl)`）。
+
+  取不到数据源时**一律不成立**并去重告警，不会当作「没选过」放行。因数据源约定「没选过 = 0」，
+  `等于 0` 天然表达「这个分支点还没做过选择」、`大于等于 1` 表达「做过任何选择」。
+
+  与手写 `Variable["选项_xxx"] == n` 的区别：变量只是运行时的一份工作副本（回放会污染、切场景会重置、
+  读档要靠推送才同步），而判定器求值当刻回调宿主，拿到的是存档里的权威值。同一个判定器在对话库
+  （经 `AleCond_Vn_StoryChoiceIs` 桥接）与外部系统（如节点树的解锁条件）里通用。
+
+### 注意
+
+- ⚠️ **`Vn.StoryChoiceIs` 的 Key 与参数（id / 顺序 / 个数）自本版起冻结**——它们序列化进了各方已配置的
+  条件资产，也决定了 Lua 桥接的实参顺序。需要新语义请另开一个键。
+- 本包的判定器都会被 `VnConditionBridge` 自动注册成 Lua 全局函数，因此**所有使用本包的工程**都会多出一个
+  `AleCond_Vn_StoryChoiceIs`。工程内的 `CustomLuaFunctionInfo` 登记资产会在脚本重编译时自动补上这一项
+  （从未生成过登记资产的工程不受影响）。
+
+### API
+
+- `VnStoryManager` 新增 `public static int ResolveFirstEntryId(string conversationName)`；
+  `StartVnStory` 新增可选参数 `bool skipStartEntryConditions = false`。
+- `VnStoryPlayer.Play` 新增可选参数 `bool skipStartEntryConditions = false`。
+- 新增 `Ale.VnFramework.Conditions.IVnStoryChoiceSource` 与 `VnStoryChoiceIsEvaluator`
+  （公开常量 `ParamDialogueNumber` / `ParamIndex`）。
+
 ## [1.6.1] - 2026-08-23
 
 给 `StartVnStory` 补上「这段播完之后怎么办」：一个完成回调，和一个是否自动收场的开关。

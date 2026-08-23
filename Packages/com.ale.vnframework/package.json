@@ -1,6 +1,6 @@
 {
   "name": "com.ale.vnframework",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "displayName": "Ale VN Framework",
   "description": "基于 Pixel Crushers Dialogue System 的视觉小说（Galgame）剧情演出框架：背景 / 角色 / 特效 / 头像 / 音频的切换与补间、分支选项与消息提示、富文本符号与多语言条目，以及玩家侧的播放控制（自动播放 / 1x-2x-3x 倍速 / 长按快进 / 遇未读对话自动停止 / 隐藏 UI）与配套的已读记录、存档 Get-Set 接口。角色动画经 VnActorAnimator 对接 com.ale.animsimulatorsystem，后端无关（Spine / Live2D / Unity 动画均可），且没有 VnActorAnimator 组件的纯图片、纯粒子预制体也能正常实例化与销毁。【前置】Dialogue System 需自行从 Asset Store 安装，并为其补上官方 Assembly Definitions——本包是 UPM 包，其代码位于独立程序集，无法引用落在 Assembly-CSharp 里的 Dialogue System。详见 README 的『前置条件』章节。【安装顺序】依赖经 git URL 分发，而 UPM 不支持在 dependencies 里写 git URL，故此处 dependencies 留空、无法自动拉取——必须先装 com.ale.toolkit（≥ 1.7.10）与 com.ale.animsimulatorsystem（≥ 2.6.0）再装本包，颠倒会报「找不到 Ale.Toolkit.* / Ale.AnimSimulatorSystem」。toolkit 的下限是 1.7.10：更早的版本会把加载失败的 Addressable 条目长驻静态表，使该地址此后无法重试。",
   "unity": "2022.3",

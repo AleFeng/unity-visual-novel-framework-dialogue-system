@@ -307,7 +307,13 @@ UI 样式定制、运行时 API——请见插件内文档：
 
 想让对话节点的 **Conditions** 用上 Ale Toolkit 的条件判定器（任何系统实现的判定器都会自动出现在
 节点的条件下拉里），见
-**[条件系统](Packages/com.ale.vnframework/README.md#条件系统)** 章节。
+**[条件系统](Packages/com.ale.vnframework/README.md#条件系统)** 章节。内置判定器
+`Vn.StoryChoiceIs`（判断某个分支点当时选了第几项）也在那里，它同样可以被对话库之外的系统
+（如节点树的解锁条件）直接复用。
+
+「剧情回顾」这类**准入已由外部判定**的场景，用
+`StartVnStory(..., skipStartEntryConditions: true)` 跳过会话入口条件——否则带准入条件的会话会被
+Dialogue System 静默拒播（一行都不播、也不报错）。
 
 要接玩家侧的**自动播放 / 倍速 / 快进 / 隐藏 UI** 那排按钮，以及配套的已读记录与存档接口，见
 **[播放控制](Packages/com.ale.vnframework/README.md#播放控制)** 章节。

@@ -228,6 +228,10 @@ void OnDisable()
 }
 ```
 
+> 除了 number / flag 两种取值器，还能按接口登记整个服务：
+> `VnConditionSources.RegisterService<IMyService>(impl)` —— 判定器经 `ctx.GetService<IMyService>()` 取用。
+> 本包自带的 `Vn.StoryChoiceIs` 就是这么拿数据的（见下文「内置判定器」）。
+
 **3. 在节点上配置**：Conditions 右侧点 `...` 打开向导 → 条件类型选 **Custom** →
 在 `Ale 条件` 分组里挑判定器 → 填参数。生成的表达式形如：
 
@@ -257,6 +261,37 @@ AleCond_Condition_NumberCompare("时间段", "大于等于", 3) == true
 取不到数值时返回 `NaN`，于是 `>` `≥` `=` `≤` `<` 五种比较**全部为假**——「忘了接线」表现为
 节点进不去，而不是静默放行（若回落成 `0`，`时间段 ≤ 5` 这类条件会悄悄通过）。
 告警按 id 去重，不会刷屏。
+
+### 内置判定器：`Vn.StoryChoiceIs`（1.6.2+）
+
+判断**某个分支点当时选了第几项**。剧情走向本就是 VN 最常用的门槛，本包直接提供：
+
+| 参数 | 类型 | 说明 |
+| --- | --- | --- |
+| `dialogue` | String | 分支点的对话编号（剧本里那串数字），**不含变量名前缀** |
+| `op` | Int | 比较符下拉（`大于` / `大于等于` / `等于` / `小于等于` / `小于`），复用 toolkit 的 `ConditionCompare` |
+| `index` | Int | 选项序号，**从 1 开始** |
+
+数据来自宿主实现并注册的 `IVnStoryChoiceSource`：
+
+```csharp
+public class MyStorySave : IVnStoryChoiceSource
+{
+    // 约定：入参不含前缀；序号 1 起；没选过 / 查不到一律返回 0
+    public int GetChoice(string dialogueNumber) => _choices.TryGetValue(dialogueNumber, out var v) ? v : 0;
+}
+
+VnConditionSources.RegisterService<IVnStoryChoiceSource>(myStorySave);
+```
+
+> **为什么不直接读对话变量**：变量只是运行时的一份工作副本——回放 / 试玩会污染它、切场景会重置它、
+> 读档要靠推送才同步。哪一次选择「算数」由宿主的存档说了算，所以由宿主把权威值交出来。
+>
+> 因为「没选过 = 0」，`等于 0` 天然表达「这个分支点还没做过选择」，`大于等于 1` 表达「做过任何选择」。
+> 没注册数据源时**一律不成立**并告警一次，不会当作「没选过」放行。
+
+同一个判定器在对话库与外部系统（如节点树的解锁条件）里通用 —— 前者经 `AleCond_Vn_StoryChoiceIs`
+桥接，后者直接把判定器写进 `ConditionExpression`。
 
 ### 命名规则
 
@@ -561,7 +596,7 @@ public class VnStoryManager : ToolkitMonoSingleton<VnStoryManager>
 
 | 成员 | 说明 |
 |---|---|
-| `void StartVnStory(string conversationName = null, Action onFinished = null, bool autoStopOnFinished = true)` | 开始演出。UI / 背景 / 角色的**淡入只做一次**（重复调用会跳过），但传入的对话名**始终生效**——已在播放时再调一次即切到新对话（此时上一次登记的 `onFinished` 会被顶掉并告警）。<br>`onFinished`：该段对话播放完成后触发；**自然播完与中途 `StopVnStory` 都会触发**，两者经 DS 同一个 `OnConversationEnd` 收口、框架无从区分。经 `OnConversationEnd` 派发，覆写该方法的子类**必须调 base**。<br>`autoStopOnFinished`（1.6.1 起，默认 `true`）：播完后自动 `StopVnStory()`。回调里若接着开了下一段对话则自动跳过，不会把新剧情立刻淡出。传 `false` 用于连播。<br>⚠️ 1.2.0 之前是整个方法早退，导致剧情自然播完后再播任何一段都是静默空操作。 |
+| `void StartVnStory(string conversationName = null, Action onFinished = null, bool autoStopOnFinished = true, bool skipStartEntryConditions = false)` | 开始演出。UI / 背景 / 角色的**淡入只做一次**（重复调用会跳过），但传入的对话名**始终生效**——已在播放时再调一次即切到新对话（此时上一次登记的 `onFinished` 会被顶掉并告警）。<br>`onFinished`：该段对话播放完成后触发；**自然播完与中途 `StopVnStory` 都会触发**，两者经 DS 同一个 `OnConversationEnd` 收口、框架无从区分。经 `OnConversationEnd` 派发，覆写该方法的子类**必须调 base**。<br>`autoStopOnFinished`（1.6.1 起，默认 `true`）：播完后自动 `StopVnStory()`。回调里若接着开了下一段对话则自动跳过，不会把新剧情立刻淡出。传 `false` 用于连播。<br>`skipStartEntryConditions`（1.6.2 起，默认 `false`）：跳过**入口节点的条件判定**。会话的 START 指向首个真实节点，那个节点的条件顺带成了「本会话的准入门」——条件不成立时（`falseConditionAction` 为 Block）START 没有任何有效出边，`StartConversation` 原地返回，**一行都不播、也不发 `OnConversationEnd`**，调用方只看到「点了没反应」。传 `true` 改为直接以首个真实节点为入口开播，用于**准入已由外部判定**的场景（剧情回顾等）。只影响入口这一步，开播后各出边上的条件照常求值。 |
 | `void StopVnStory(bool clearAllData = true)` | 停止演出。⚠️ 停对话发生在 UI 淡出的**完成回调**里，不是同步；且仅当 `clearAllData` 为 true 时才停。 |
 | `string[] GetAllConversationName()` | 取剧情库中全部对话名。 |
 | `void RegisterGameplaySystem(string fieldTitle, Action<string> callback)` | 按**任意**字段标题接管演出流程：节点上出现该标题且值非空时，回调收到其 `Value`。重复注册会覆盖并告警。 |
