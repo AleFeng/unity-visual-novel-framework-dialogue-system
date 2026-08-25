@@ -63,8 +63,10 @@ namespace Ale.VnFramework
         [SerializeField] private EVnPlaybackSpeedTier defaultSpeedTier = EVnPlaybackSpeedTier.X1;
 
         [Header("快进")]
-        [Tooltip("快进倍率。默认 5 倍。作用于打字机、补间、延时、角色动画、粒子与语音。")]
-        [SerializeField] private float fastForwardRate = 5.0f;
+        [Tooltip("快进倍率：默认 10 倍。作用于补间、延时、角色动画、粒子与语音。")]
+        [SerializeField] private float fastForwardRate = 10.0f;
+        [Tooltip("快进倍率 打字机：默认 30 倍。台词的快进速度可能跟 场景快进不匹配，需要独立调整)")]
+        [SerializeField] private float fastForwardTypewriterRate = 30.0f;
         [Tooltip("新对话停止 默认是否开启。开启后，快进中遇到从未出现过的对话节点会中止快进。")]
         [SerializeField] private bool stopOnUnreadDefaultOn = true;
 
@@ -126,11 +128,18 @@ namespace Ale.VnFramework
             }
         }
 
-        /// <summary>快进倍率。</summary>
+        /// <summary>快进倍率。作用于补间、延时、角色动画、粒子与语音，<b>不含打字机</b>。</summary>
         public float FastForwardRate
         {
             get => fastForwardRate;
             set { fastForwardRate = Mathf.Max(1f, value); ApplyRate(); }
+        }
+
+        /// <summary>快进时的打字机倍率（字速与标点停顿）。与 <see cref="FastForwardRate"/> 各自独立。</summary>
+        public float FastForwardTypewriterRate
+        {
+            get => fastForwardTypewriterRate;
+            set { fastForwardTypewriterRate = Mathf.Max(1f, value); ApplyRate(); }
         }
 
         /// <summary>自动播放的停留时长（秒）。</summary>
@@ -262,6 +271,7 @@ namespace Ale.VnFramework
             autoPlayDelay = autoPlayDelay,
             speedTier = (int)_speedTier,
             fastForwardRate = fastForwardRate,
+            fastForwardTypewriterRate = fastForwardTypewriterRate,
             stopOnUnread = _stopOnUnread,
         };
 
@@ -280,6 +290,12 @@ namespace Ale.VnFramework
             _autoPlay = data.autoPlay;
             autoPlayDelay = Mathf.Max(0f, data.autoPlayDelay);
             fastForwardRate = Mathf.Max(1f, data.fastForwardRate);
+            // 非正数视为「这份存档里没有这个字段」，保留 Inspector 上配好的值。
+            // 本字段是 1.6.1 才加的，1.6.0 及更早存下来的档、以及零初始化的自定义二进制格式
+            // 都会给到 0；若照搬 Max(1f, 0) 夹成 1，快进时打字机就完全不提速了，
+            // 表现为「按住快进，演出快了、字还是一个个蹦」——静默降级比报错更难查。
+            if (data.fastForwardTypewriterRate > 0f)
+                fastForwardTypewriterRate = Mathf.Max(1f, data.fastForwardTypewriterRate);
             _stopOnUnread = data.stopOnUnread;
 
             var tier = Mathf.Clamp(data.speedTier, 1, 3);
@@ -349,11 +365,13 @@ namespace Ale.VnFramework
         /// <summary>
         /// 把当前状态合成为两条倍率推给 <see cref="VnStoryManager"/>。
         ///
-        /// <para><b>快进与档位取 Max，不是相乘。</b>相乘会让 3 档速的玩家按下快进拿到 15 倍；
-        /// 而纯覆盖又会在「快进倍率 2、档位 3」时反而变慢——按下快进结果更慢是明显的 bug。
-        /// Max 保证单调不减，且默认值（5 > 3）下等价于覆盖。</para>
+        /// <para><b>快进与档位取 Max，不是相乘。</b>相乘会让 3 档速的玩家按下快进拿到 90 倍；
+        /// 而纯覆盖又会在「快进打字机倍率 2、档位 3」时反而变慢——按下快进结果更慢是明显的 bug。
+        /// Max 保证单调不减，且默认值（30 > 3）下等价于覆盖。</para>
         ///
-        /// <para>演出倍率<b>不含</b>档位：档位按需求只管台词打字机。</para>
+        /// <para>演出倍率<b>不含</b>档位：档位按需求只管台词打字机。
+        /// 快进时两条倍率各取各的——打字机用 <see cref="fastForwardTypewriterRate"/>，
+        /// 其余演出用 <see cref="fastForwardRate"/>。</para>
         /// </summary>
         private void ApplyRate()
         {
@@ -363,7 +381,7 @@ namespace Ale.VnFramework
             float tier = (int)_speedTier;
             bool ff = _fastForwardState == EVnFastForwardState.Active;
 
-            float typewriter = ff ? Mathf.Max(tier, fastForwardRate) : tier;
+            float typewriter = ff ? Mathf.Max(tier, fastForwardTypewriterRate) : tier;
             float playback = ff ? fastForwardRate : 1f;
 
             manager.SetPlaybackRate(playback, typewriter);

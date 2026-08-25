@@ -81,7 +81,7 @@ Dialogue System 把「说什么、跳到哪」解决得很好，但「这句话�
 | 富文本与打字机 | 支持富文本图标符号与打字机符号，逐字显示过程中可插入停顿、表情图标等。 |
 | 多语言条目 | 开启 `ATK_LOCALIZATION` 后，Unity Localization 选中的语言代码同步给 Dialogue System，由它按语言取对白与角色名；批量翻译用 DS 自带的 CSV 导出 / 导入。 |
 | 剧情启停 | `VnStoryPlayer` 可在 Inspector 配置对话名与**启动时机**（`AutoPlayTiming`：`Manual` / `OnStart` / `OnEnable`），也可由 `Button.OnClick` 或脚本触发。**这管的是「何时开始一段对话」，与下一行的自动播放不是一回事。** |
-| 播放控制 | 右下角一排按钮：**自动播放**（一句演完自动进下一句，等打字机 + 语音都结束）、**播放速度** 1x/2x/3x、**快进**（长按倍速，默认 5x，覆盖打字机 / 补间 / 动画 / 粒子 / 语音）、**新对话停止**（快进遇未读行自动中止）、**隐藏 UI**。见[播放控制](Packages/com.ale.vnframework/README.md#播放控制)。 |
+| 播放控制 | 右下角一排按钮：**自动播放**（一句演完自动进下一句，等打字机 + 语音都结束）、**播放速度** 1x/2x/3x、**快进**（长按倍速，打字机默认 30x、补间 / 动画 / 粒子 / 语音默认 5x，两条独立可配）、**新对话停止**（快进遇未读行自动中止）、**隐藏 UI**。见[播放控制](Packages/com.ale.vnframework/README.md#播放控制)。 |
 | 已读记录与存档 | 已读判定复用 Dialogue System 的 `SimStatus`，持久化用自研位图编码（每节点 2 bit，1 万行约 2.4–4.4 KB，DS 自带格式同规模 60–80 KB）。经 `GetSaveData` / `LoadSaveData` / `ResetAll` 交给宿主存档系统，本包不落盘。 |
 | 资源加载可选 Addressables | 经 `ToolkitAssets` 统一入口：开启 `ATK_ADDRESSABLE` 走 Addressables 异步加载与句柄回收，否则回落 `Resources`。 |
 | 玩法系统扩展点 | `RegisterGameplaySystem(fieldTitle, callback)` 让任意自定义系统按字段标题接管演出流程；`RegisterVariableGetter` 同步宿主变量到 Lua。 |
@@ -147,7 +147,7 @@ https://github.com/AleFeng/unity-visual-novel-framework-dialogue-system.git?path
 这样装的是 `main` 的最新提交。**要固定版本，把 `#<tag>` 加在整条 URL 的最末尾**（必须在 `?path=` 之后）：
 
 ```
-https://github.com/AleFeng/unity-visual-novel-framework-dialogue-system.git?path=/Packages/com.ale.vnframework#1.6.1
+https://github.com/AleFeng/unity-visual-novel-framework-dialogue-system.git?path=/Packages/com.ale.vnframework#1.6.3
 ```
 
 可用的 tag 见 [Releases](https://github.com/AleFeng/unity-visual-novel-framework-dialogue-system/releases)。

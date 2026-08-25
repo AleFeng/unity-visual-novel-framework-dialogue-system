@@ -35,8 +35,13 @@ namespace Ale.VnFramework
         public float autoPlayDelay = 1.0f;
         /// <summary>速度档位：1 / 2 / 3。</summary>
         public int speedTier = 1;
-        /// <summary>快进倍率。</summary>
+        /// <summary>快进倍率（补间 / 延时 / 动画 / 粒子 / 语音，不含打字机）。</summary>
         public float fastForwardRate = 5.0f;
+        /// <summary>
+        /// 快进时的打字机倍率。1.6.1 新增，更早的存档里没有这个字段——
+        /// 载入方把非正数当作「缺失」处理，保留组件上配好的值。
+        /// </summary>
+        public float fastForwardTypewriterRate = 30.0f;
         /// <summary>新对话停止开关。</summary>
         public bool stopOnUnread = true;
 
@@ -47,6 +52,7 @@ namespace Ale.VnFramework
             autoPlayDelay = autoPlayDelay,
             speedTier = speedTier,
             fastForwardRate = fastForwardRate,
+            fastForwardTypewriterRate = fastForwardTypewriterRate,
             stopOnUnread = stopOnUnread,
         };
     }
@@ -57,7 +63,7 @@ namespace Ale.VnFramework
     ///
     /// <para>纯字段 + <c>[Serializable]</c>，JsonUtility / ES3 / 自定义二进制都能直接吃。</para>
     ///
-    /// <para><b>配置不编码，已读记录编码。</b>配置就五个值，做成不透明串只会妨碍排查；
+    /// <para><b>配置不编码，已读记录编码。</b>配置就六个值，做成不透明串只会妨碍排查；
     /// 已读记录则可能上万条，必须压（见 <see cref="VnReadHistoryCodec"/>）。</para>
     /// </summary>
     [Serializable]

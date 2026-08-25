@@ -366,6 +366,10 @@ MonoBehaviour:
   dialogueHeadAddressableFolder: VNFrameworkDemo/Assets/ActorsHead/
   dialogueHeadExtension: .png
   dialogueHeadFieldTitle: DialogueHead
+  dialogueHeadPrefabAddressableFolder: VNFrameworkDemo/Assets/ActorsHead/
+  dialogueHeadPrefabExtension: .prefab
+  dialogueHeadPrefabFieldTitle: DialogueHeadPrefab
+  dialogueHeadAnimFieldTitle: DialogueHeadAnim
   srBackgroundCurrent: {fileID: 3949102267733036111}
   srBackgroundLast: {fileID: 701117378272908449}
   backgroundAddressableFolder: VNFrameworkDemo/Assets/Backgrounds/
@@ -449,7 +453,8 @@ MonoBehaviour:
   autoPlayDelay: 1
   typewriterStartGrace: 0.5
   defaultSpeedTier: 1
-  fastForwardRate: 5
+  fastForwardRate: 10
+  fastForwardTypewriterRate: 30
   stopOnUnreadDefaultOn: 1
 --- !u!114 &991698653840573476
 MonoBehaviour:

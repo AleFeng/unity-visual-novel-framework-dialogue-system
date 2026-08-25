@@ -346,7 +346,7 @@ Dialogue System 的参数类型只有 Bool / Double / String / 数据库实体�
 | --- | --- | --- |
 | 自动播放 | **关** | 开启后，一句台词「演完」自动进下一句。演完 = 打字机显示完 **且**（若配了语音）语音播完，再等一个可配的停留时长（默认 1 秒）。 |
 | 播放速度 | **1x** | 点一下在 1x → 2x → 3x → 1x 之间循环。**只影响台词打字机**（字速与标点停顿）。 |
-| 快进 | — | **长按**进入、松开退出。倍率可配（默认 5x），作用于打字机、补间、延时、角色 Animator、粒子与语音。 |
+| 快进 | — | **长按**进入、松开退出。倍率**分两条**、各自可配：打字机默认 **30x**，补间 / 延时 / 角色 Animator / 粒子 / 语音默认 **5x**。 |
 | 新对话停止 | **开** | 快进中遇到**从未出现过**的对话节点时中止快进。 |
 | 隐藏 UI | — | 点一下藏起全部界面，再点屏幕任意位置恢复。 |
 
@@ -359,8 +359,12 @@ Dialogue System 的参数类型只有 Bool / Double / String / 数据库实体�
 否则玩家一路按住会在每个未读行抖动式地一停一走，等于没停。这个中间态在代码里是
 `EVnFastForwardState.Suppressed`，Inspector 与日志里都看得见。
 
-**③ 快进与速度档取 `Max`，不是相乘。** 相乘会让 3 档速的玩家按下快进拿到 15 倍；
-纯覆盖又会在「快进倍率 2、档位 3」时**反而变慢**。`Max` 保证单调不减，默认值（5 > 3）下等价于覆盖。
+**③ 快进与速度档取 `Max`，不是相乘。** 相乘会让 3 档速的玩家按下快进拿到 90 倍；
+纯覆盖又会在「快进打字机倍率 2、档位 3」时**反而变慢**。`Max` 保证单调不减，默认值（30 > 3）下等价于覆盖。
+
+> 快进的两条倍率各管各的：打字机取 `FastForwardTypewriterRate`（默认 30），
+> 其余演出取 `FastForwardRate`（默认 5）。分开是因为快进时台词是唯一需要「一眼扫过」的东西，
+> 而演出跟着 30 倍走只会糊成一片。
 
 ### 已读记录
 
@@ -767,7 +771,8 @@ public class VnPlaybackController : MonoBehaviour
     public EVnFastForwardState FastForwardState { get; }
     public bool IsFastForwarding { get; }
     public bool StopOnUnread { get; set; }
-    public float FastForwardRate { get; set; }
+    public float FastForwardRate { get; set; }           // 快进倍率：补间/延时/动画/粒子/语音（默认 5）
+    public float FastForwardTypewriterRate { get; set; } // 快进时的打字机倍率（默认 30）
     public float AutoPlayDelay { get; set; }
 
     public event Action StateChanged;          // 任意状态变化，供按钮刷新图标
