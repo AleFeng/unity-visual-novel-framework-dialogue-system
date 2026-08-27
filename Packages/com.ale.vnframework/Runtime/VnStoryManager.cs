@@ -58,6 +58,8 @@ namespace Ale.VnFramework
             
             // 初始化 UI设置
             InitUI();
+            // 初始化 演出黑幕
+            InitScreenMask();
             // 初始化 背景
             InitBackground();
             
@@ -371,12 +373,22 @@ namespace Ale.VnFramework
         }
         
         /// <summary>
-        /// 停止 Vn故事系统
+        /// 停止 Vn故事系统。
+        /// <para>⚠️ 本方法只是<b>开始</b>收场：UI 要淡出约半秒，对话要等淡出走完才真正停。
+        /// 需要「等它彻底停妥」的调用方（如演出黑幕的收场转场）请用 <paramref name="onComplete"/>，
+        /// 别在本方法返回后就当作已经停了。</para>
         /// </summary>
         /// <param name="clearAllData">清除 所有数据</param>
-        public void StopVnStory(bool clearAllData = true)
+        /// <param name="onComplete">收场<b>真正完成</b>后的回调：对话已停、UI 已淡到全透明。
+        /// <para>本来就没在演出时立刻兑现——「已经是收场状态」也是一种完成，
+        /// 否则等它的调用方会挂在那儿等一个永远不来的信号。</para></param>
+        public void StopVnStory(bool clearAllData = true, Action onComplete = null)
         {
-            if (!_isVnStoryStarted) return;
+            if (!_isVnStoryStarted)
+            {
+                onComplete?.Invoke();
+                return;
+            }
             _isVnStoryStarted = false;
             
             // 淡出 UI
@@ -393,6 +405,10 @@ namespace Ale.VnFramework
                 // 普通行——会被播出来、也会被宿主记进已读与解锁。围栏留到最后一刻，
                 // 这段窗口里的行才会继续被 OnConversationLine 挡在门外。
                 ClearConversationFence();
+
+                // 收场到此为止才算走完。演出黑幕等的就是这一刻——早一步揭幕，
+                // 玩家会看见对话框还剩半截透明度浮在下一层界面上。
+                onComplete?.Invoke();
             });
             // 淡出 背景
             FadeOutBackground();
@@ -661,6 +677,10 @@ namespace Ale.VnFramework
 
         // 当前是否正在淡入UI。用于控制在拖拽过程中 不切换动画动作播放器时，保持UI状态不变。
         private bool _isUiFadeIn;
+
+        // UI 淡入是否已经**走完**。_isUiFadeIn 在淡入刚开始时就为 true，那半秒里对话框还只有
+        // 一点点不透明度；演出黑幕要判断「对话框真的显示出来了没有」，看的是本旗子。
+        private bool _isUiFadeInCompleted;
         
         /// <summary>
         /// 初始化 UI设置
@@ -676,6 +696,7 @@ namespace Ale.VnFramework
                 uiCanvasGroup.blocksRaycasts = false; // 不接收射线
             }
             _isUiFadeIn = false;
+            _isUiFadeInCompleted = false;
         }
         
         /// <summary>
@@ -685,6 +706,8 @@ namespace Ale.VnFramework
         {
             if (_isUiFadeIn) return; // 已经是淡入状态则不重复执行
             _isUiFadeIn = true;
+            // 新一轮淡入开始，先把「已淡完」复位。
+            _isUiFadeInCompleted = false;
             
             // 淡入 UI
             if (uiCanvasGroup)
@@ -695,6 +718,7 @@ namespace Ale.VnFramework
                     // uiCanvasGroup可用
                     uiCanvasGroup.interactable = true; // 可交互
                     uiCanvasGroup.blocksRaycasts = true; // 接收射线
+                    _isUiFadeInCompleted = true;
                 });
             }
             else if (uiCanvas)
@@ -702,6 +726,13 @@ namespace Ale.VnFramework
                 uiCanvas.gameObject.SetActive(true);
                 // 与 FadeOutUI 的兜底路径成对：那里断掉了射线，这里必须收回来，否则淡出过一次 UI 就永久失灵。
                 SetUiRaycasterEnabled(true);
+                _isUiFadeInCompleted = true;
+            }
+            else
+            {
+                // 两者都没配：没有可淡入的东西，那就当它「已经淡完了」。
+                // 否则等这面旗子的演出黑幕会一路等到超时，白白黑屏几秒。
+                _isUiFadeInCompleted = true;
             }
         }
         
@@ -713,6 +744,7 @@ namespace Ale.VnFramework
         {
             if (_isUiFadeIn == false) return; // 已经是淡出状态则不重复执行
             _isUiFadeIn = false;
+            _isUiFadeInCompleted = false;
             
             // 淡出 UI
             if (uiCanvasGroup)
@@ -757,6 +789,268 @@ namespace Ale.VnFramework
             if (!uiCanvas) return;
             var raycaster = uiCanvas.GetComponent<GraphicRaycaster>();
             if (raycaster) raycaster.enabled = enable;
+        }
+        #endregion
+
+        #region 演出黑幕
+        // Des：
+        // 一场演出的**开场与收场**各遮一次黑幕。要遮的是这两段本来就不该被看见的过程：
+        //   开场——Dialogue System 的对话画布是 ScreenSpaceOverlay，永远盖在所有相机输出之上，
+        //         于是对话框会先于背景与角色亮相，还要等演出资源陆续加载回来才铺齐；
+        //   收场——对话画布同理会比宿主界面晚一步淡完，玩家会看见半透明的对话框浮在下一层界面上。
+        //
+        // ⚠️ 黑幕自己也必须挂在一张 **ScreenSpaceOverlay、且 sortingOrder 高于对话画布** 的画布上，
+        //    否则盖不住对话框——宿主工程的 UI 分层若是 ScreenSpaceCamera / WorldSpace，
+        //    无论排多前都会被 Overlay 画布压在下面。
+        //
+        // ⚠️ 黑幕挂在本管理器（常驻）身上，不能挂在宿主界面上：收场时界面会先关掉，
+        //    而黑幕要比它活得久——不然幕布跟着界面一起消失，遮了等于没遮。
+        //
+        // 连播不经过这里：本 region 的两个转场由**宿主界面的开与关**驱动，而连播全程界面既不开也不关，
+        // 段与段之间自然没有黑幕。
+
+        [Header("演出黑幕")]
+        [Tooltip("演出黑幕的 CanvasGroup。开场与收场用它遮住 Dialogue System 的加载与收尾过程。\n" +
+                 "留空则黑幕整体关闭：下面两个转场方法退化成直通，其余流程不受影响。\n" +
+                 "⚠️ 它所在的画布必须是 ScreenSpaceOverlay 且 sortingOrder 高于对话画布，否则盖不住对话框。")]
+        [SerializeField] private CanvasGroup screenMaskCanvasGroup;
+
+        [Tooltip("黑幕淡入 / 淡出的时长（秒）。")]
+        [SerializeField] private float screenMaskFadeDuration = 0.3f;
+
+        [Tooltip("转场里等待「演出就绪」「收场停妥」的最长时间（秒）。超时即强行揭幕并告警——\n" +
+                 "宁可让玩家看到一个还没铺好的画面，也绝不把他永久留在全黑里。")]
+        [SerializeField] private float screenMaskTimeout = 8f;
+
+        // 正在跑的转场协程。同一时刻只允许一个。
+        private Coroutine _screenMaskRoutine;
+
+        /// <summary>是否配了演出黑幕。没配时两个转场方法退化成直通。</summary>
+        public bool HasScreenMask => screenMaskCanvasGroup;
+
+        /// <summary>黑幕当前是否全黑。</summary>
+        public bool IsScreenMaskOpaque => screenMaskCanvasGroup && screenMaskCanvasGroup.alpha >= 1f;
+
+        /// <summary>当前是否正在跑一次转场。</summary>
+        public bool IsPlayingScreenMaskTransition => _screenMaskRoutine != null;
+
+        /// <summary>
+        /// 演出是否已经「铺好」，可以揭幕了。
+        ///
+        /// <para>两个条件：UI 淡入已经<b>走完</b>（对话框真的显示出来了，而不是还停在 alpha 0.2 上），
+        /// 且没有演出资源在加载中（背景 / 角色 / 头像都已就位）。</para>
+        ///
+        /// <para>刻意<b>不</b>要求「对话处于激活状态」：会话被入口条件拦下时它永远为 false，
+        /// 那样只会让玩家干瞪着黑幕直到超时。该不该开播是调用方的事，黑幕只管别挡着。</para>
+        /// </summary>
+        public bool IsStoryPresentationReady => _isUiFadeInCompleted && !IsLoadingAssets;
+
+        /// <summary>
+        /// 初始化 演出黑幕。黑幕初始全透明、不拦射线。
+        /// </summary>
+        private void InitScreenMask()
+        {
+            if (!screenMaskCanvasGroup) return;
+            screenMaskCanvasGroup.alpha = 0f;
+            screenMaskCanvasGroup.interactable = false;
+            screenMaskCanvasGroup.blocksRaycasts = false;
+        }
+
+        /// <summary>
+        /// <b>开场转场</b>：黑幕淡入到全黑 → 全黑时执行 <paramref name="onBlackout"/>（调用方在此开播剧情）
+        /// → 等演出就绪（<see cref="IsStoryPresentationReady"/>）→ 黑幕淡出。
+        /// </summary>
+        /// <param name="onBlackout">屏幕全黑的那一刻要做的事，通常是「开始播这段剧情」。
+        /// <para>它抛出的异常会被就地吞掉并记录：让异常穿出去会打断转场协程，黑幕就永远停在全黑上。</para></param>
+        /// <param name="onComplete">整个转场走完（黑幕已经淡回全透明）后的回调。</param>
+        public void PlayStoryIntroTransition(Action onBlackout, Action onComplete = null)
+        {
+            if (!HasScreenMask)
+            {
+                // 没配黑幕：退化成直通，表现与没有本功能时完全一致。
+                InvokeScreenMaskCallback(onBlackout, "开场");
+                InvokeScreenMaskCallback(onComplete, "开场");
+                return;
+            }
+
+            StopScreenMaskRoutine();
+            _screenMaskRoutine = StartCoroutine(StoryIntroTransitionRoutine(onBlackout, onComplete));
+        }
+
+        /// <summary>
+        /// <b>收场转场</b>：黑幕淡入到全黑 → 全黑时停止演出（<see cref="StopVnStory"/>）→ 演出<b>真正停妥后</b>
+        /// 执行 <paramref name="onStopped"/>（调用方在此关闭宿主界面）→ 黑幕淡出。
+        ///
+        /// <para>停止演出这一步由本方法自己做，而不是交给调用方：它是异步的（UI 要淡出约半秒，
+        /// 对话要等淡出走完才真正停），得等它停妥才能揭幕，这个等待没有理由让每个调用方各写一遍。</para>
+        /// </summary>
+        /// <param name="onStopped">演出已停妥、屏幕仍全黑的那一刻要做的事，通常是「关闭宿主界面」。
+        /// <para>同样会吞掉异常，理由见 <see cref="PlayStoryIntroTransition"/>。</para></param>
+        /// <param name="onComplete">整个转场走完（黑幕已经淡回全透明）后的回调。</param>
+        public void PlayStoryOutroTransition(Action onStopped, Action onComplete = null)
+        {
+            if (!HasScreenMask)
+            {
+                // 没配黑幕：停演出、关界面，一步不等——与没有本功能时的收场表现一致。
+                StopVnStory();
+                InvokeScreenMaskCallback(onStopped, "收场");
+                InvokeScreenMaskCallback(onComplete, "收场");
+                return;
+            }
+
+            StopScreenMaskRoutine();
+            _screenMaskRoutine = StartCoroutine(StoryOutroTransitionRoutine(onStopped, onComplete));
+        }
+
+        /// <summary>
+        /// 黑幕淡入（淡到全黑）。低层原语，正常的开场 / 收场请直接用上面那两个转场。
+        /// </summary>
+        public void FadeInScreenMask(Action onComplete = null)
+        {
+            FadeScreenMask(1f, onComplete);
+        }
+
+        /// <summary>
+        /// 黑幕淡出（淡回全透明）。低层原语，正常的开场 / 收场请直接用上面那两个转场。
+        /// </summary>
+        public void FadeOutScreenMask(Action onComplete = null)
+        {
+            FadeScreenMask(0f, onComplete);
+        }
+
+        private void FadeScreenMask(float targetAlpha, Action onComplete)
+        {
+            if (!HasScreenMask)
+            {
+                InvokeScreenMaskCallback(onComplete, "黑幕");
+                return;
+            }
+
+            StopScreenMaskRoutine();
+            _screenMaskRoutine = StartCoroutine(FadeScreenMaskThenRoutine(targetAlpha, onComplete));
+        }
+
+        private IEnumerator StoryIntroTransitionRoutine(Action onBlackout, Action onComplete)
+        {
+            yield return FadeScreenMaskRoutine(1f);
+
+            // 全黑了才开播：Dialogue System 的加载与亮相全程被遮住。
+            InvokeScreenMaskCallback(onBlackout, "开场");
+
+            yield return WaitScreenMaskConditionRoutine(IsStoryPresentationReadyCheck,
+                "开场转场 >> 等演出就绪超时，强行揭幕。检查是不是有演出资源一直没加载回来。");
+
+            yield return FadeScreenMaskRoutine(0f);
+
+            _screenMaskRoutine = null;
+            InvokeScreenMaskCallback(onComplete, "开场");
+        }
+
+        private IEnumerator StoryOutroTransitionRoutine(Action onStopped, Action onComplete)
+        {
+            yield return FadeScreenMaskRoutine(1f);
+
+            // 全黑了才收场。StopVnStory 只是**开始**收场，故必须等它的完成回调。
+            bool stopped = false;
+            StopVnStory(true, () => stopped = true);
+
+            yield return WaitScreenMaskConditionRoutine(() => stopped,
+                "收场转场 >> 等演出停妥超时，强行揭幕。检查 UI 淡出的完成回调是不是没回来。");
+
+            // 演出已停妥，此刻才关界面：整个切换都发生在全黑之下。
+            InvokeScreenMaskCallback(onStopped, "收场");
+
+            // 等一帧再揭幕。关界面是同步生效的，但下一层界面的布局与渲染要到下一帧才落地，
+            // 早一帧揭幕会闪一下它的旧状态。
+            yield return null;
+
+            yield return FadeScreenMaskRoutine(0f);
+
+            _screenMaskRoutine = null;
+            InvokeScreenMaskCallback(onComplete, "收场");
+        }
+
+        private IEnumerator FadeScreenMaskThenRoutine(float targetAlpha, Action onComplete)
+        {
+            yield return FadeScreenMaskRoutine(targetAlpha);
+
+            _screenMaskRoutine = null;
+            InvokeScreenMaskCallback(onComplete, "黑幕");
+        }
+
+        /// <summary>
+        /// 把黑幕补间到目标不透明度，等它走完。
+        /// </summary>
+        private IEnumerator FadeScreenMaskRoutine(float targetAlpha)
+        {
+            if (!screenMaskCanvasGroup) yield break;
+
+            // 幕布一动就吃掉所有点击：这段时间里正在开播 / 收场，输入没有任何合理去处，
+            // 漏下去只会点在对话框的继续按钮上，白白跳掉一行。
+            screenMaskCanvasGroup.blocksRaycasts = true;
+
+            bool done = false;
+            // 直接用 ToolkitTween 而不是 VnTween：黑幕是转场 chrome，不该跟着演出倍速走
+            //（快进时把转场也压成 1/5 秒，画面只会在两次闪烁之间来回跳）。
+            // unscaled：暂停菜单把 timeScale 压到 0 时，转场仍然要走得完。
+            ToolkitTween.Kill(screenMaskCanvasGroup);
+            ToolkitTween.FadeCanvasGroup(screenMaskCanvasGroup, targetAlpha,
+                Mathf.Max(0f, screenMaskFadeDuration), EToolkitEase.OutQuad, true, () => done = true);
+
+            while (!done) yield return null;
+
+            // 透明了就把射线还回去，否则黑幕会变成一张永远拦着所有点击的隐形板子。
+            if (targetAlpha <= 0f) screenMaskCanvasGroup.blocksRaycasts = false;
+        }
+
+        // 供 WaitScreenMaskConditionRoutine 用的谓词。写成方法而不是 lambda，
+        // 是为了让 CodeDom 之类的老编译器也能吃下这段（工程里的 execute_code 走的就是 C# 6）。
+        private bool IsStoryPresentationReadyCheck()
+        {
+            return IsStoryPresentationReady;
+        }
+
+        /// <summary>
+        /// 等某个条件成立，最多等 <see cref="screenMaskTimeout"/> 秒。超时只告警不抛错——
+        /// 转场的任何一环出问题，代价都不该是把玩家永久留在全黑里。
+        /// </summary>
+        private IEnumerator WaitScreenMaskConditionRoutine(Func<bool> condition, string timeoutMessage)
+        {
+            float deadline = Time.unscaledTime + Mathf.Max(0f, screenMaskTimeout);
+            while (!condition())
+            {
+                if (Time.unscaledTime >= deadline)
+                {
+                    Debug.LogWarning($"[VnStoryManager] {timeoutMessage}（已等 {screenMaskTimeout} 秒）", this);
+                    yield break;
+                }
+                yield return null;
+            }
+        }
+
+        /// <summary>
+        /// 兑现转场回调。异常必须就地吞掉：回调是宿主代码（开播、关界面），
+        /// 让异常穿出去会打断转场协程，黑幕便永远停在全黑上——那是最糟的失败方式。
+        /// </summary>
+        private void InvokeScreenMaskCallback(Action callback, string phase)
+        {
+            if (callback == null) return;
+            try
+            {
+                callback.Invoke();
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[VnStoryManager] {phase}转场 >> 回调抛出异常，已就地吞掉以保证黑幕能揭开。", this);
+                Debug.LogException(e, this);
+            }
+        }
+
+        private void StopScreenMaskRoutine()
+        {
+            if (_screenMaskRoutine == null) return;
+            StopCoroutine(_screenMaskRoutine);
+            _screenMaskRoutine = null;
         }
         #endregion
         

@@ -115,6 +115,34 @@ player.PlaySequence(new[] { "Chapter01/Prologue", "Chapter01/Scene01" },
 player.PlaySequence(new[] { "序章：入职-1" }, stopAtConversationBoundary: true);
 ```
 
+### 演出黑幕（1.6.6+）
+
+一场演出的**开场与收场**各遮一层黑幕，把两段本来就不该被看见的过程盖住：开场时对话框会先于
+背景与角色亮相、还要等演出资源陆续加载回来才铺齐；收场时对话框又会比宿主界面晚一步淡完，
+半透明地浮在下一层界面上。
+
+```csharp
+// 开场：黑幕淡入 → 全黑后才开播 → 演出铺好了才揭幕
+VnStoryManager.Instance.PlayStoryIntroTransition(() => player.Play("Chapter01/Prologue"));
+
+// 收场：黑幕淡入 → 全黑后停演出、等它真正停妥 → 关界面 → 揭幕
+VnStoryManager.Instance.PlayStoryOutroTransition(() => storyView.Close());
+```
+
+配置只有一步：在 `VnStoryManager` 的「演出黑幕」里接上一个 `CanvasGroup`。**留空则整套功能关闭**，
+两个转场方法退化成直通，表现与没有本功能时完全一致。
+
+⚠️ 两条摆放上的硬要求，不满足就等于没遮：
+
+- 黑幕所在的画布必须是 **`ScreenSpaceOverlay` 且 `sortingOrder` 高于对话画布**。Dialogue System
+  的对话画布正是 Overlay，永远盖在所有相机输出之上——宿主的 UI 分层若是 `ScreenSpaceCamera` /
+  `WorldSpace`，排多前都盖不住对话框。
+- 黑幕要挂在 **`VnStoryManager`（常驻）** 身上，不能挂在宿主界面上。收场时界面会先关掉，
+  幕布跟着一起消失的话，遮了等于没遮。
+
+**连播不会插进黑幕**：转场由宿主界面的开与关驱动，而连播全程界面既不开也不关。详见
+[演出黑幕 API](#演出黑幕)。
+
 ### 角色动画对接（`VnActorAnimator`）
 
 演出层与动画系统之间的唯一接缝。组件只持有 `com.ale.animsimulatorsystem` 的 **`AnimatorBase`**，
@@ -521,7 +549,8 @@ com.ale.vnframework/
 ├── Runtime/
 │   ├── Ale.VnFramework.asmdef   运行时程序集
 │   ├── VnStoryManager.cs        演出核心：字段条目解析、背景/角色/特效/头像/消息、
-│   │                            预制体生命周期、全局变量、玩法扩展点
+│   │                            预制体生命周期、全局变量、玩法扩展点、
+│   │                            会话围栏、演出黑幕
 │   ├── VnStoryPlayer.cs         剧情启停：按对话名启停、多段连播、自动播放时机（≠ 逐句自动推进）
 │   ├── VnActorAnimator.cs       角色动画对接层（→ AnimatorBase，就绪门控）
 │   ├── VnResponseButton.cs      分支选项按钮（已读 / 未读态）
@@ -621,7 +650,7 @@ public class VnStoryManager : ToolkitMonoSingleton<VnStoryManager>
 | 成员 | 说明 |
 |---|---|
 | `void StartVnStory(string conversationName = null, Action onFinished = null, bool autoStopOnFinished = true, bool skipStartEntryConditions = false)` | 开始演出。UI / 背景 / 角色的**淡入只做一次**（重复调用会跳过），但传入的对话名**始终生效**——已在播放时再调一次即切到新对话（此时上一次登记的 `onFinished` 会被顶掉并告警）。<br>`onFinished`：该段对话播放完成后触发；**自然播完与中途 `StopVnStory` 都会触发**，两者经 DS 同一个 `OnConversationEnd` 收口、框架无从区分。经 `OnConversationEnd` 派发，覆写该方法的子类**必须调 base**。<br>`autoStopOnFinished`（1.6.1 起，默认 `true`）：播完后自动 `StopVnStory()`。回调里若接着开了下一段对话则自动跳过，不会把新剧情立刻淡出。传 `false` 用于连播。<br>`skipStartEntryConditions`（1.6.2 起，默认 `false`）：跳过**入口节点的条件判定**。会话的 START 指向首个真实节点，那个节点的条件顺带成了「本会话的准入门」——条件不成立时（`falseConditionAction` 为 Block）START 没有任何有效出边，`StartConversation` 原地返回，**一行都不播、也不发 `OnConversationEnd`**，调用方只看到「点了没反应」。传 `true` 改为直接以首个真实节点为入口开播，用于**准入已由外部判定**的场景（剧情回顾等）。只影响入口这一步，开播后各出边上的条件照常求值。 |
-| `void StopVnStory(bool clearAllData = true)` | 停止演出。⚠️ 停对话发生在 UI 淡出的**完成回调**里，不是同步；且仅当 `clearAllData` 为 true 时才停。 |
+| `void StopVnStory(bool clearAllData = true, Action onComplete = null)` | 停止演出。⚠️ 停对话发生在 UI 淡出的**完成回调**里，不是同步；且仅当 `clearAllData` 为 true 时才停。<br>`onComplete`（1.6.6+）：收场**真正完成**（对话已停、UI 已淡到全透明）后触发——需要「等它彻底停妥」的调用方不必自己数帧。本来就没在演出时立刻兑现。 |
 | `string[] GetAllConversationName()` | 取剧情库中全部对话名。 |
 | `void RegisterGameplaySystem(string fieldTitle, Action<string> callback)` | 按**任意**字段标题接管演出流程：节点上出现该标题且值非空时，回调收到其 `Value`。重复注册会覆盖并告警。 |
 | `void UnregisterGameplaySystem(string fieldTitle)` | 注销。传空值时静默忽略。 |
@@ -650,6 +679,34 @@ public class VnStoryManager : ToolkitMonoSingleton<VnStoryManager>
   再记，否则会凭空记下一段玩家没看到的剧情。需要零副作用的场景请自行做状态快照。
 - 围栏在 `StopVnStory` **淡出结束后**才撤（不是方法一进门就撤）：那半秒里对话还没真正停，
   过早撤销会让这段窗口里的行变成没围栏的普通行。
+
+### 演出黑幕
+
+开场与收场各遮一层黑幕（1.6.6+）。摆放要求与概览见「功能概览 · 演出黑幕」。
+
+| 成员 | 说明 |
+|---|---|
+| `void PlayStoryIntroTransition(Action onBlackout, Action onComplete = null)` | **开场转场**：黑幕淡入到全黑 → 全黑时执行 `onBlackout`（调用方在此开播）→ 等 `IsStoryPresentationReady` → 黑幕淡出。 |
+| `void PlayStoryOutroTransition(Action onStopped, Action onComplete = null)` | **收场转场**：黑幕淡入到全黑 → 全黑时 `StopVnStory()` 并**等它真正停妥** → 执行 `onStopped`（调用方在此关闭宿主界面）→ 等一帧 → 黑幕淡出。<br>停演出这一步由本方法自己做：它是异步的（UI 要淡出约半秒），这个等待没理由让每个调用方各写一遍。 |
+| `bool IsStoryPresentationReady { get; }` | 演出是否已经「铺好」：UI 淡入已**走完** 且没有演出资源在加载中。<br>刻意**不**要求「对话处于激活状态」——会话被入口条件拦下时它永远为 false，那样只会让玩家干瞪着黑幕直到超时。 |
+| `void FadeInScreenMask(Action onComplete = null)` | 低层原语：黑幕淡入（淡到全黑）。 |
+| `void FadeOutScreenMask(Action onComplete = null)` | 低层原语：黑幕淡出（淡回全透明）。 |
+| `bool HasScreenMask { get; }` | 是否配了黑幕。为 `false` 时上面两个转场退化成直通。 |
+| `bool IsScreenMaskOpaque { get; }` | 黑幕当前是否全黑。 |
+| `bool IsPlayingScreenMaskTransition { get; }` | 当前是否正在跑一次转场。 |
+| `CanvasGroup screenMaskCanvasGroup` | Inspector 设置项。留空则黑幕整体关闭。 |
+| `float screenMaskFadeDuration` | Inspector 设置项，淡入 / 淡出时长（秒），默认 `0.3`。 |
+| `float screenMaskTimeout` | Inspector 设置项，两处等待的超时（秒），默认 `8`。 |
+
+- **同一时刻只有一个转场在跑**：再起一个会先把在跑的那个停掉。
+- **回调里的异常会被就地吞掉并记录**：`onBlackout` / `onStopped` 是宿主代码（开播、关界面），
+  让异常穿出去会打断转场协程，黑幕便永远停在全黑上——那是最糟的失败方式。
+- **两处等待都有超时**（`screenMaskTimeout`）：超时只告警不抛错，宁可让玩家看到一个还没铺好的
+  画面，也绝不把他永久留在全黑里。
+- 黑幕的补间直接走 `ToolkitTween` 而非 `VnTween`：它是转场 chrome，不跟演出倍速走；
+  且用 unscaled 时间，暂停菜单把 `timeScale` 压到 0 时转场仍然走得完。
+- 幕布一动就 `blocksRaycasts = true`，淡回全透明时才还回去——遮幕期间的点击没有任何合理去处，
+  漏下去只会点在对话框的继续按钮上、白白跳掉一行。
 
 ### `VnStoryPlayer`
 

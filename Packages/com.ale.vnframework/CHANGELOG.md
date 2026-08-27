@@ -9,6 +9,59 @@
 > `PixelCrushers.DialogueSystem.VnStoryFramework` → `Ale.VnFramework`。脚本 `.meta` 的 GUID 全部保留，
 > 既有场景与预制体的组件引用不受影响。**升级前请先读下方「⚠ 前置条件」。**
 
+## [1.6.6] - 2026-08-27
+
+一场演出的开场与收场各遮一层黑幕。**不配黑幕就完全不生效**，既有工程升级后表现不变。
+
+### 新增
+
+- **`VnStoryManager` 新增「演出黑幕」**：三个 Inspector 设置项（`screenMaskCanvasGroup` /
+  `screenMaskFadeDuration` / `screenMaskTimeout`）与两个转场方法。
+
+  ```csharp
+  // 开场：黑幕淡入 → 全黑后才开播 → 演出铺好了才揭幕
+  VnStoryManager.Instance.PlayStoryIntroTransition(() => player.Play("Chapter01/Prologue"));
+
+  // 收场：黑幕淡入 → 全黑后停演出、等它真正停妥 → 关界面 → 揭幕
+  VnStoryManager.Instance.PlayStoryOutroTransition(() => storyView.Close());
+  ```
+
+  遮的是这两段本来就不该被看见的过程：**开场**时 Dialogue System 的对话框会先于背景与角色亮相，
+  还要等演出资源陆续加载回来才铺齐；**收场**时对话框又会比宿主界面晚一步淡完，
+  于是半透明的对话框会浮在下一层界面上。
+
+  ⚠️ **黑幕必须挂在一张 `ScreenSpaceOverlay`、且 `sortingOrder` 高于对话画布的画布上。**
+  Dialogue System 的对话画布正是 Overlay，它永远盖在所有相机输出之上——宿主工程的 UI 分层
+  若是 `ScreenSpaceCamera` / `WorldSpace`，无论排多前都盖不住对话框。
+
+  ⚠️ **黑幕要挂在本管理器（常驻）身上，不能挂在宿主界面上。** 收场时界面会先关掉，
+  幕布跟着一起消失的话，遮了等于没遮。
+
+- **`VnStoryManager.IsStoryPresentationReady`** —— 演出是否已经「铺好」：UI 淡入已**走完**
+  （对话框真的显示出来了，而不是还停在 alpha 0.2 上）且没有演出资源在加载中。
+  开场转场等的就是它。
+
+  刻意**不**要求「对话处于激活状态」：会话被入口条件拦下时它永远为 false，
+  那样只会让玩家干瞪着黑幕直到超时。
+
+- **`FadeInScreenMask` / `FadeOutScreenMask` / `HasScreenMask` / `IsScreenMaskOpaque` /
+  `IsPlayingScreenMaskTransition`** —— 低层原语与状态查询，正常的开场 / 收场直接用上面两个转场即可。
+
+### 变更
+
+- **`StopVnStory` 新增可选参数 `onComplete`**：收场**真正完成**（对话已停、UI 已淡到全透明）后触发。
+  本方法一直都只是**开始**收场，需要「等它彻底停妥」的调用方从此不必自己数帧。
+  本来就没在演出时立刻兑现——「已经是收场状态」也是一种完成。
+
+### 说明
+
+- **连播不会插进黑幕**：两个转场由**宿主界面的开与关**驱动，而连播全程界面既不开也不关。
+- 黑幕的补间直接走 `ToolkitTween` 而非 `VnTween`：它是转场 chrome，不跟演出倍速走
+  （快进时把转场也压成 1/5 秒，画面只会在两次闪烁之间来回跳）；且用 unscaled 时间，
+  暂停菜单把 `timeScale` 压到 0 时转场仍然走得完。
+- 两处等待都有超时（`screenMaskTimeout`，默认 8 秒）：超时只告警不抛错。
+  转场的任何一环出问题，代价都不该是把玩家永久留在全黑里。
+
 ## [1.6.5] - 2026-08-27
 
 连播多了一个「只播点名的这几段」的开关。纯新增，默认行为不变。
