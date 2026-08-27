@@ -9,6 +9,40 @@
 > `PixelCrushers.DialogueSystem.VnStoryFramework` → `Ale.VnFramework`。脚本 `.meta` 的 GUID 全部保留，
 > 既有场景与预制体的组件引用不受影响。**升级前请先读下方「⚠ 前置条件」。**
 
+## [1.6.4] - 2026-08-27
+
+`VnStoryPlayer` 能一段接一段地连播了。纯新增，既有调用点零改动。
+
+### 新增
+
+- **`VnStoryPlayer.PlaySequence(IList<string>, Action, bool, bool)`** —— 按顺序连播多段剧情：
+
+  ```csharp
+  player.PlaySequence(new[] { "序章：入职", "第一章：紧急事件-1" },
+      onFinished: () => Debug.Log("开场剧情播完"));
+  ```
+
+  段与段之间的时序细节全部在组件内部消化，调用方只管给一个名称列表：
+
+  - **前 N-1 段不收场**（`autoStopOnFinished: false` 交给 `StartVnStory`），UI 与背景留在场上等下一段接手；
+    **最后一段透传调用方传入的收场方式** —— 于是「连播一队」与「播一段」的收尾表现完全一致。
+  - **段间跨一帧再播下一段。** 完成回调跑在 Dialogue System 的 `ConversationController.Close()` 广播里，
+    此刻 `IsPlaying` 还没被 `conversationEnded` 事件复位，直接接着播会被 `Play` 开头那句
+    「已在播放中则不重复播放」**静默吞掉**；在 DS 的收尾调用栈里重入开新对话本身也不稳。等一帧两件事一起解决。
+  - **`Stop()` / `OnDisable()` 中止整队。** 完成回调「自然播完」与「中途被停止」都会触发、框架无从区分，
+    所以中止只能由这两处主动清队列来表达。不然玩家一返回，排在后面的那一段照样会在一帧后凭空开播。
+  - 空项会被跳过；只有一段时等价于 `Play`，不留下任何队列状态。
+  - 整队的 `onFinished` **只兑现一次**（不是每段一次）。与单段一致：自然播完与中途停止**都会**触发。
+
+- **`VnStoryPlayer.IsPlayingSequence`** —— 是否正在连播。
+
+### 变更
+
+- **`Play(string, Action, bool, bool)` 会先中止在排的连播队列。** 单段播放是一次全新的播放请求，
+  不清队列的话，排在后面的那一段会在一帧后把这次请求顶掉。连播的各段走内部的 `PlayInternal`，不受影响。
+- **连播队列不跨组件启停**：`OnDisable` 时协程会被 Unity 一并停掉，队列留着也再无人推进，故一并清空。
+  需要续播由调用方重新登记。
+
 ## [1.6.3] - 2026-08-25
 
 把快进的**打字机倍率**从演出倍率里拆出来单独配置。

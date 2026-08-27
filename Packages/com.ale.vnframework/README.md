@@ -95,6 +95,18 @@ VnStoryManager.Instance.StopVnStory(clearAllData: false);
 string[] names = VnStoryManager.Instance.GetAllConversationName();
 ```
 
+要**一段接一段地连播**用 `PlaySequence`（1.6.4+）。段间的时序细节都在组件内部消化掉，
+调用方只管给一个名称列表：
+
+```csharp
+player.PlaySequence(new[] { "Chapter01/Prologue", "Chapter01/Scene01" },
+    onFinished: () => Debug.Log("开场剧情播完"));
+```
+
+前 N-1 段不收场（UI 与背景留在场上等下一段接手），最后一段按 `autoStopOnFinished` 收场——
+于是连播一队与播一段的收尾表现完全一致。整队的 `onFinished` 只兑现一次。
+`Stop()` 与组件被停用都会中止整队；详见 [`VnStoryPlayer` API](#vnstoryplayer)。
+
 ### 角色动画对接（`VnActorAnimator`）
 
 演出层与动画系统之间的唯一接缝。组件只持有 `com.ale.animsimulatorsystem` 的 **`AnimatorBase`**，
@@ -502,7 +514,7 @@ com.ale.vnframework/
 │   ├── Ale.VnFramework.asmdef   运行时程序集
 │   ├── VnStoryManager.cs        演出核心：字段条目解析、背景/角色/特效/头像/消息、
 │   │                            预制体生命周期、全局变量、玩法扩展点
-│   ├── VnStoryPlayer.cs         剧情启停：按对话名启停、自动播放时机（≠ 逐句自动推进）
+│   ├── VnStoryPlayer.cs         剧情启停：按对话名启停、多段连播、自动播放时机（≠ 逐句自动推进）
 │   ├── VnActorAnimator.cs       角色动画对接层（→ AnimatorBase，就绪门控）
 │   ├── VnResponseButton.cs      分支选项按钮（已读 / 未读态）
 │   ├── Audio/                   可替换的音频后端
@@ -623,9 +635,12 @@ public enum VnStoryPlayer.AutoPlayTiming { Manual, OnStart, OnEnable }
 |---|---|
 | `void Play()` | 用当前 `ConversationName` 播放。可直接绑到 Button 的 OnClick。名称为空时告警并返回。 |
 | `void Play(string conversationNamePlay)` | 播放指定对话，并把名称记进 `ConversationName`。 |
-| `void Stop()` | 停止。**只停由本组件播放的那段**（当前对话名需与 `ConversationName` 一致）。 |
-| `string ConversationName { get; set; }` | 当前要播放的对话名。 |
+| `void Play(string conversationNamePlay, Action onFinished, bool autoStopOnFinished = true, bool skipStartEntryConditions = false)` | 播放并登记完成回调与收场方式，四个参数直通 `VnStoryManager.StartVnStory`。<br>⚠️ `onFinished` **自然播完与中途停止都会触发**，框架不区分这两者。<br>1.6.4 起：**会先中止在排的连播队列**——单段播放是一次全新的播放请求，不清队列的话，排在后面的那一段会在一帧后把这次请求顶掉。 |
+| `void PlaySequence(IList<string> conversationNamePlays, Action onFinished = null, bool autoStopOnFinished = true, bool skipStartEntryConditions = false)` | **按顺序连播多段**（1.6.4+）。空项跳过；只有一段时等价于 `Play`，不留下队列状态。<br>**前 N-1 段不收场**，UI 与背景留在场上等下一段接手；**最后一段透传 `autoStopOnFinished`**，于是连播与单播的收尾表现一致。<br>**段间跨一帧再播下一段**：完成回调跑在 DS 的 `ConversationController.Close()` 广播里，此刻 `IsPlaying` 尚未被 `conversationEnded` 复位，直接接着播会被 `Play` 开头的「已在播放中」守卫**静默吞掉**；在 DS 的收尾调用栈里重入开新对话本身也不稳。<br>`onFinished` 是**整队**的回调，只兑现一次（不是每段一次），同样「播完与被打断都会触发」。 |
+| `void Stop()` | 停止。**只停由本组件播放的那段**（当前对话名需与 `ConversationName` 一致）。<br>1.6.4 起：**无条件中止连播队列**，且排在其余守卫之前——段间那一帧里 `IsPlaying` 已复位、对话也已结束，守卫会全部早退，不先清队列的话下一段会在一帧后凭空开播。 |
+| `string ConversationName { get; set; }` | 当前要播放的对话名。连播时它是**正在播的那一段**。 |
 | `bool IsPlaying { get; private set; }` | 是否正在播放。由 Dialogue System 的 `conversationEnded` 置回 false。 |
+| `bool IsPlayingSequence { get; }` | 是否正在连播（1.6.4+）。整队走完、或被 `Stop()` / `OnDisable` 中止后变 false。 |
 | `UnityEvent OnPlayStarted { get; }` | 只读属性，返回可 `AddListener` 的实例（非泛型 `UnityEvent`）。 |
 | `UnityEvent OnPlayEnded { get; }` | 同上。⚠️ 对话因**任何**原因结束都会触发，不限于本组件调用 `Stop()`。 |
 
