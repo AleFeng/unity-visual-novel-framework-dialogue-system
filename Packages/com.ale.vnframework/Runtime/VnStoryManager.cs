@@ -387,6 +387,12 @@ namespace Ale.VnFramework
                     // 停止 当前的对话演出。
                     StopStoryConversation();
                 }
+
+                // 围栏撑到这里才撤：本方法只是**开始**收场，对话要等淡出结束才真正停。
+                // 若在方法开头就撤，这半秒里玩家再点几下，后续那些行就成了「没围栏」的
+                // 普通行——会被播出来、也会被宿主记进已读与解锁。围栏留到最后一刻，
+                // 这段窗口里的行才会继续被 OnConversationLine 挡在门外。
+                ClearConversationFence();
             });
             // 淡出 背景
             FadeOutBackground();
@@ -587,7 +593,14 @@ namespace Ale.VnFramework
         public virtual void OnConversationLine(Subtitle subtitle)
         {
             if (subtitle == null) return;
-            
+
+            // 越出会话围栏：拦停，不播这一行（详见 SetConversationFence）
+            if (IsOutsideConversationFence(subtitle))
+            {
+                StopVnStory();
+                return;
+            }
+
             // 处理 对话变化
             OnConversationLineDialogueChange(subtitle);
             // 处理 头像预制体变化。必须排在 OnConversationLineDialogueChange 之后：
@@ -3185,6 +3198,69 @@ namespace Ale.VnFramework
             Localization.language = code;
         }
 #endif
+        #endregion
+
+        #region 会话围栏
+        // Des：
+        // Dialogue System 的跨会话链接是无缝穿行的：一段播完会直接流进下一段，
+        // 不发 OnConversationEnd。这对「主线一路播到底」正合适，但当调用方只想播
+        // 指定的那几段时（如新游戏的开场剧情），就需要在会话边界上把它拦住。
+        //
+        // 围栏就是这道闸：非空时，演出只允许留在这些会话里；跨会话链接流到围栏外的
+        // 那一行会被 OnConversationLine 拦停。⚠️ 那一行已经被 DS 走到并标记了已读状态，
+        // 只是不会被播出来——需要「零副作用」的场景（如剧情回顾）请自行做状态快照。
+
+        // 围栏内的会话名。空 = 不设限。
+        private readonly HashSet<string> _conversationFence = new HashSet<string>();
+
+        /// <summary>
+        /// 当前是否设了会话围栏。
+        /// </summary>
+        public bool HasConversationFence => _conversationFence.Count > 0;
+
+        /// <summary>
+        /// 设置会话围栏：演出只允许留在这些会话里，跨会话链接流到围栏外时自动停。
+        /// <para>传 null 或空集合等同于 <see cref="ClearConversationFence"/>。
+        /// 围栏在 <see cref="StopVnStory"/> 时自动撤销，不会留到下一次播放。</para>
+        /// </summary>
+        public void SetConversationFence(IList<string> conversationNames)
+        {
+            _conversationFence.Clear();
+            if (conversationNames == null) return;
+            for (int i = 0; i < conversationNames.Count; i++)
+            {
+                if (!string.IsNullOrEmpty(conversationNames[i]))
+                    _conversationFence.Add(conversationNames[i]);
+            }
+        }
+
+        /// <summary>
+        /// 撤销会话围栏，恢复「跟着跨会话链接一路播下去」的默认行为。
+        /// </summary>
+        public void ClearConversationFence()
+        {
+            _conversationFence.Clear();
+        }
+
+        /// <summary>
+        /// 这一行是否越出了会话围栏。没设围栏时恒为 <c>false</c>。
+        /// <para>覆写 <see cref="OnConversationLine"/> 的子类若在 base 之后还有自己的
+        /// 记账逻辑（已读、解锁之类），应当先查它——越界的那一行不该被算作「到达过」。</para>
+        /// </summary>
+        public bool IsOutsideConversationFence(Subtitle subtitle)
+        {
+            if (_conversationFence.Count == 0) return false;
+            if (subtitle == null || subtitle.dialogueEntry == null) return false;
+
+            var database = DialogueManager.hasInstance ? DialogueManager.masterDatabase : null;
+            var conversation = database != null
+                ? database.GetConversation(subtitle.dialogueEntry.conversationID)
+                : null;
+            // 查不到会话名时不拦：宁可多播，也别把演出静默掐死在一个查不出所以然的地方。
+            if (conversation == null || string.IsNullOrEmpty(conversation.Title)) return false;
+
+            return !_conversationFence.Contains(conversation.Title);
+        }
         #endregion
 
         #region 变量注册

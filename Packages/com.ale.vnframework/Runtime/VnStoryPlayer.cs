@@ -125,6 +125,8 @@ namespace Ale.VnFramework
             // 单段播放是一次全新的播放请求：先中止可能还排着队的连播，
             // 否则排在后面的那一段会在一帧后把这次请求顶掉（见 PlaySequence 的跨帧串联）。
             ClearSequence();
+            // 也撤掉上一次可能留下的会话围栏——Play 的语义就是「跟着链接一路播下去」。
+            if (VnStoryManager.Instance) VnStoryManager.Instance.ClearConversationFence();
 
             PlayInternal(conversationNamePlay, onFinished, autoStopOnFinished, skipStartEntryConditions);
         }
@@ -212,6 +214,8 @@ namespace Ale.VnFramework
         private bool _sequenceSkipStartEntryConditions;
         // 跨帧播下一段的协程。
         private Coroutine _sequenceNextRoutine;
+        // 每段是否播到会话边界即止（给管理器架会话围栏）。
+        private bool _sequenceStopAtBoundary;
 
         /// <summary>
         /// 是否正在连播（<see cref="PlaySequence"/> 启动的多段播放尚未走完）。
@@ -230,8 +234,14 @@ namespace Ale.VnFramework
         /// 于是「连播一队」与「播一段」的收尾表现完全一致。</para></param>
         /// <param name="skipStartEntryConditions">是否跳过入口节点的条件判定，默认 <c>false</c>。
         /// 对队列里的每一段都生效，含义见 <see cref="VnStoryManager.StartVnStory"/> 的同名参数。</param>
+        /// <param name="stopAtConversationBoundary">每一段是否<b>播到会话边界即止</b>，默认 <c>false</c>。
+        /// <para>Dialogue System 的跨会话链接是无缝穿行的：一段播完会直接流进下一段。传 <c>false</c>
+        /// 保持这个默认行为（主线一路播到底）；传 <c>true</c> 则给每一段架一道会话围栏，
+        /// 流出这一段就停——用于「只播指定的这几段」的场景，如新游戏的开场剧情。</para>
+        /// <para>⚠️ 围栏外的那一行已被 DS 走到并标记已读，只是不会播出来。</para></param>
         public void PlaySequence(IList<string> conversationNamePlays, Action onFinished = null,
-            bool autoStopOnFinished = true, bool skipStartEntryConditions = false)
+            bool autoStopOnFinished = true, bool skipStartEntryConditions = false,
+            bool stopAtConversationBoundary = false)
         {
             // 先清掉可能还在排的上一队，再收集本次的有效段。
             // 顺手滤掉空项：调用方常常从配置表取列表，中间留空行是常态。
@@ -251,12 +261,16 @@ namespace Ale.VnFramework
                 return;
             }
 
-            // 单段没有「连」可言，走普通播放，不留下任何队列状态。
+            _sequenceStopAtBoundary = stopAtConversationBoundary;
+
+            // 单段没有「连」可言，直接播，不留下任何队列状态。
             if (_sequence.Count == 1)
             {
                 string only = _sequence[0];
                 _sequence.Clear();
-                Play(only, onFinished, autoStopOnFinished, skipStartEntryConditions);
+                ApplyConversationFence(only);
+                PlayInternal(only, onFinished, autoStopOnFinished, skipStartEntryConditions);
+                if (!IsPlaying) ClearSequence();
                 return;
             }
 
@@ -274,6 +288,10 @@ namespace Ale.VnFramework
         private void PlaySequenceCurrent()
         {
             bool isLast = _sequenceIndex >= _sequence.Count - 1;
+
+            // 围栏一次只圈当前这一段：段与段之间由本组件显式推进，
+            // 把整个列表都圈进去反而会让段间的跨会话链接无缝流过去、再被队列重播一次。
+            ApplyConversationFence(_sequence[_sequenceIndex]);
 
             // 走 PlayInternal 而不是 Play：后者会把队列当成「上一队」清掉。
             PlayInternal(_sequence[_sequenceIndex], OnSequenceSegmentFinished,
@@ -338,10 +356,23 @@ namespace Ale.VnFramework
         /// 中止并清空连播队列。不动 <see cref="_sequenceOnFinished"/>——那是
         /// <see cref="InvokeSequenceFinished"/> 的职责，中止时回调仍需兑现。
         /// </summary>
+        /// <summary>
+        /// 按 <see cref="_sequenceStopAtBoundary"/> 给管理器架好（或撤掉）本段的会话围栏。
+        /// </summary>
+        private void ApplyConversationFence(string conversationName)
+        {
+            if (VnStoryManager.Instance == false) return;
+            if (_sequenceStopAtBoundary)
+                VnStoryManager.Instance.SetConversationFence(new[] { conversationName });
+            else
+                VnStoryManager.Instance.ClearConversationFence();
+        }
+
         private void ClearSequence()
         {
             _sequence.Clear();
             _sequenceIndex = 0;
+            _sequenceStopAtBoundary = false;
             if (_sequenceNextRoutine != null)
             {
                 StopCoroutine(_sequenceNextRoutine);

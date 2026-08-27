@@ -107,6 +107,14 @@ player.PlaySequence(new[] { "Chapter01/Prologue", "Chapter01/Scene01" },
 于是连播一队与播一段的收尾表现完全一致。整队的 `onFinished` 只兑现一次。
 `Stop()` 与组件被停用都会中止整队；详见 [`VnStoryPlayer` API](#vnstoryplayer)。
 
+剧本里的主线通常是靠**跨会话链接**一路串到底的（序章 → 第一章 → …），所以默认会顺着
+链接一直播下去。只想播点名的那几段时（如新游戏的开场剧情）传
+`stopAtConversationBoundary: true`（1.6.5+），每段播到会话边界即止：
+
+```csharp
+player.PlaySequence(new[] { "序章：入职-1" }, stopAtConversationBoundary: true);
+```
+
 ### 角色动画对接（`VnActorAnimator`）
 
 演出层与动画系统之间的唯一接缝。组件只持有 `com.ale.animsimulatorsystem` 的 **`AnimatorBase`**，
@@ -624,6 +632,25 @@ public class VnStoryManager : ToolkitMonoSingleton<VnStoryManager>
 
 剧本侧还可用 Lua 函数 `BackgroundFadeDuration(duration)` 在对话中改背景淡入淡出时长（非 C# API）。
 
+### 会话围栏
+
+只播点名的那几段、不跟着跨会话链接流出去。`PlaySequence` 的 `stopAtConversationBoundary`
+用的就是它，也可以直接调用来圈定任意一组会话。
+
+| 成员 | 说明 |
+|---|---|
+| `void SetConversationFence(IList<string> conversationNames)` | 设围栏：演出只允许留在这些会话里。传 null 或空集合等同于撤销。 |
+| `void ClearConversationFence()` | 撤围栏，恢复「跟着链接一路播下去」的默认行为。 |
+| `bool HasConversationFence { get; }` | 当前是否设了围栏。 |
+| `bool IsOutsideConversationFence(Subtitle subtitle)` | 这一行是否越出围栏。没设围栏时恒为 `false`。 |
+
+- 越界的那一行会在 `OnConversationLine` 最前面被拦掉并 `StopVnStory()`，**不会播出来**。
+- ⚠️ 但它**已经被 Dialogue System 走到并标记了已读状态**。覆写 `OnConversationLine` 的子类
+  若在 base 之后还有自己的记账（已读、解锁之类），应当**先查 `IsOutsideConversationFence`**
+  再记，否则会凭空记下一段玩家没看到的剧情。需要零副作用的场景请自行做状态快照。
+- 围栏在 `StopVnStory` **淡出结束后**才撤（不是方法一进门就撤）：那半秒里对话还没真正停，
+  过早撤销会让这段窗口里的行变成没围栏的普通行。
+
 ### `VnStoryPlayer`
 
 ```csharp
@@ -636,7 +663,8 @@ public enum VnStoryPlayer.AutoPlayTiming { Manual, OnStart, OnEnable }
 | `void Play()` | 用当前 `ConversationName` 播放。可直接绑到 Button 的 OnClick。名称为空时告警并返回。 |
 | `void Play(string conversationNamePlay)` | 播放指定对话，并把名称记进 `ConversationName`。 |
 | `void Play(string conversationNamePlay, Action onFinished, bool autoStopOnFinished = true, bool skipStartEntryConditions = false)` | 播放并登记完成回调与收场方式，四个参数直通 `VnStoryManager.StartVnStory`。<br>⚠️ `onFinished` **自然播完与中途停止都会触发**，框架不区分这两者。<br>1.6.4 起：**会先中止在排的连播队列**——单段播放是一次全新的播放请求，不清队列的话，排在后面的那一段会在一帧后把这次请求顶掉。 |
-| `void PlaySequence(IList<string> conversationNamePlays, Action onFinished = null, bool autoStopOnFinished = true, bool skipStartEntryConditions = false)` | **按顺序连播多段**（1.6.4+）。空项跳过；只有一段时等价于 `Play`，不留下队列状态。<br>**前 N-1 段不收场**，UI 与背景留在场上等下一段接手；**最后一段透传 `autoStopOnFinished`**，于是连播与单播的收尾表现一致。<br>**段间跨一帧再播下一段**：完成回调跑在 DS 的 `ConversationController.Close()` 广播里，此刻 `IsPlaying` 尚未被 `conversationEnded` 复位，直接接着播会被 `Play` 开头的「已在播放中」守卫**静默吞掉**；在 DS 的收尾调用栈里重入开新对话本身也不稳。<br>`onFinished` 是**整队**的回调，只兑现一次（不是每段一次），同样「播完与被打断都会触发」。 |
+| `void PlaySequence(IList<string> conversationNamePlays, Action onFinished = null, bool autoStopOnFinished = true, bool skipStartEntryConditions = false, bool stopAtConversationBoundary = false)` | **按顺序连播多段**（1.6.4+）。空项跳过；只有一段时等价于 `Play`，不留下队列状态。<br>**前 N-1 段不收场**，UI 与背景留在场上等下一段接手；**最后一段透传 `autoStopOnFinished`**，于是连播与单播的收尾表现一致。<br>**段间跨一帧再播下一段**：完成回调跑在 DS 的 `ConversationController.Close()` 广播里，此刻 `IsPlaying` 尚未被 `conversationEnded` 复位，直接接着播会被 `Play` 开头的「已在播放中」守卫**静默吞掉**；在 DS 的收尾调用栈里重入开新对话本身也不稳。<br>`onFinished` 是**整队**的回调，只兑现一次（不是每段一次），同样「播完与被打断都会触发」。 |
+| `stopAtConversationBoundary`（上一行的第五个参数，1.6.5+） | 每一段是否**播到会话边界即止**。默认 `false`，跟着跨会话链接一路播下去。传 `true` 则每段开播前给管理器架一道[会话围栏](#会话围栏)，流出这一段就停。围栏一次只圈当前这一段——圈住整个列表反而会让段间的链接无缝流过去、再被队列重播一次。 |
 | `void Stop()` | 停止。**只停由本组件播放的那段**（当前对话名需与 `ConversationName` 一致）。<br>1.6.4 起：**无条件中止连播队列**，且排在其余守卫之前——段间那一帧里 `IsPlaying` 已复位、对话也已结束，守卫会全部早退，不先清队列的话下一段会在一帧后凭空开播。 |
 | `string ConversationName { get; set; }` | 当前要播放的对话名。连播时它是**正在播的那一段**。 |
 | `bool IsPlaying { get; private set; }` | 是否正在播放。由 Dialogue System 的 `conversationEnded` 置回 false。 |

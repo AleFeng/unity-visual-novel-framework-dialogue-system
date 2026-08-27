@@ -9,6 +9,43 @@
 > `PixelCrushers.DialogueSystem.VnStoryFramework` → `Ale.VnFramework`。脚本 `.meta` 的 GUID 全部保留，
 > 既有场景与预制体的组件引用不受影响。**升级前请先读下方「⚠ 前置条件」。**
 
+## [1.6.5] - 2026-08-27
+
+连播多了一个「只播点名的这几段」的开关。纯新增，默认行为不变。
+
+### 新增
+
+- **`VnStoryPlayer.PlaySequence` 新增第五个可选参数 `stopAtConversationBoundary`**（默认 `false`）：
+
+  ```csharp
+  player.PlaySequence(new[] { "序章：入职-1" }, stopAtConversationBoundary: true);
+  ```
+
+  Dialogue System 的跨会话链接是**无缝穿行**的：一段播完会直接流进下一段，不发
+  `OnConversationEnd`。剧本里的主线正是靠它一路串到底的，这对「从头播到尾」很合适，
+  但当调用方只想播指定的那几段时（新游戏的开场剧情、某个玩法节点触发的一小段），
+  不拦住就会一口气把后面的剧情全播了。
+
+  传 `true` 后，每一段开播前会给管理器架一道**会话围栏**，流出这一段的那一行被拦停。
+  围栏一次只圈当前这一段——把整个列表都圈进去反而会让段间的跨会话链接无缝流过去、
+  再被队列重播一次。
+
+- **`VnStoryManager` 新增会话围栏 API**：`SetConversationFence` / `ClearConversationFence` /
+  `HasConversationFence` / `IsOutsideConversationFence`。`PlaySequence` 用的就是它，
+  也可以直接调用来圈定任意一组会话。
+
+  ⚠️ **围栏外的那一行已经被 DS 走到并标记了已读状态**，只是不会被播出来（`OnConversationLine`
+  在最前面就拦掉了）。宿主若在覆写 `OnConversationLine` 时还有自己的记账逻辑（已读、解锁之类），
+  应当先查 `IsOutsideConversationFence` 再记——不然会凭空记下一段玩家根本没看到的剧情。
+  需要「零副作用」的场景（剧情回顾）仍应自行做状态快照。
+
+### 变更
+
+- **`Play` 会撤掉可能留下的会话围栏**：它的语义就是「跟着链接一路播下去」。
+- **围栏在 `StopVnStory` 的淡出结束后才撤，而不是方法一进门就撤。** `StopVnStory` 只是
+  **开始**收场，对话要等淡出完成才真正停；在开头就撤的话，这半秒里玩家再点几下，
+  后续那些行就成了「没围栏」的普通行——会被播出来、也会被宿主记进已读与解锁。
+
 ## [1.6.4] - 2026-08-27
 
 `VnStoryPlayer` 能一段接一段地连播了。纯新增，既有调用点零改动。
