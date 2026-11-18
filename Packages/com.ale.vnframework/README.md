@@ -449,7 +449,7 @@ VnStoryManager.Instance.LoadSaveData(JsonUtility.FromJson<VnStorySaveData>(json)
 VnStoryManager.Instance.ResetAll();
 ```
 
-沿用 `com.ale.toolkit` 的 `ISaveable` 四条契约：**取时深拷贝**、**载入是覆盖而非合并**、
+沿用 `com.ale.toolkit` 的 `ISaveableRuntime` 四条契约：**取时深拷贝**、**载入是覆盖而非合并**、
 **容忍 `null` 与脏数据**、**三个方法都不触发变更事件**。
 
 > 最后一条指的是**玩法**事件，为的是读档时不层层级联。**1.6.1 起纯视图刷新是个例外**：
@@ -457,7 +457,7 @@ VnStoryManager.Instance.ResetAll();
 > 按钮图标不再需要调用方手动刷新。该事件只被按钮用来换图，不会回流进任何玩法逻辑。
 > 直接调底层的 `Playback.ApplySettings()` / `ResetToDefaults()` 则仍需自己刷。
 
-> 本类只实现非泛型的 `ISaveable`，不实现 `ISaveable<TState>`——后者是 `List<TState>` 形状、
+> 本类只实现非泛型的 `ISaveableRuntime`，不实现 `ISaveableRuntime<TState>`——后者是 `List<TState>` 形状、
 > 为集合型系统设计，而这里是「一个设置块 + 一份已读位图」的单体聚合。
 
 > **覆写点（1.6.0 起）**：三个方法均为 `virtual`。`VnStorySaveData.choices`
@@ -950,7 +950,7 @@ public static class VnReadHistoryCodec
     public static bool TryDecode(string base64, out List<FVnReadRecord> records, out string error);
 }
 
-// VnStoryManager 实现 Ale.Toolkit.Runtime.ISaveable；1.6.0 起可覆写，宿主子类在 base 上扩展
+// VnStoryManager 实现 Ale.Toolkit.Runtime.ISaveableRuntime；1.6.0 起可覆写，宿主子类在 base 上扩展
 public virtual VnStorySaveData GetSaveData();           // 深拷贝。覆写点：补充 choices 等宿主数据
 public virtual void LoadSaveData(VnStorySaveData data); // 覆盖语义，容忍 null 与脏数据，不触发事件
 public virtual void ResetAll();                          // 覆写里不要反调 LoadSaveData（成环）

@@ -16,8 +16,14 @@ MonoBehaviour:
   - functionName: "Ale \u6761\u4EF6/Condition/AleCond_Condition_AlwaysTrue"
     parameters: 
     returnValue: 1
+  - functionName: "Ale \u6761\u4EF6/Condition/AleCond_Condition_GameplayTags"
+    parameters: 020000000200000000000000
+    returnValue: 1
   - functionName: "Ale \u6761\u4EF6/Condition/AleCond_Condition_HasFlag"
     parameters: 02000000
+    returnValue: 1
+  - functionName: "Ale \u6761\u4EF6/Condition/AleCond_Condition_HasGameplayTag"
+    parameters: 0200000000000000
     returnValue: 1
   - functionName: "Ale \u6761\u4EF6/Condition/AleCond_Condition_NumberCompare"
     parameters: 020000000200000001000000

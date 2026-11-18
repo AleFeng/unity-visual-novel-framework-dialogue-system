@@ -277,7 +277,7 @@ namespace Ale.VnFramework
 
         /// <summary>
         /// 按存档覆盖配置。<b>不触发 <see cref="StateChanged"/></b>——这是
-        /// <c>ISaveable</c> 的契约：批量替换状态后由调用方自行刷新界面。
+        /// <c>ISaveableRuntime</c> 的契约：批量替换状态后由调用方自行刷新界面。
         /// 刷新用 <see cref="NotifyStateChanged"/>。
         ///
         /// <para>接受 <c>null</c> 与脏数据：档位越界会被夹回 1~3，时长与倍率会被夹到合法范围，

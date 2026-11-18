@@ -42,7 +42,7 @@ namespace Ale.VnFramework
     /// <summary>
     /// Vn故事系统 管理器组件。
     /// </summary>
-    public class VnStoryManager : ToolkitMonoSingleton<VnStoryManager>, ISaveable
+    public class VnStoryManager : ToolkitMonoSingleton<VnStoryManager>, ISaveableRuntime
     {
         protected override void Awake()
         {
@@ -159,7 +159,7 @@ namespace Ale.VnFramework
         /// 存档里没有、内存里有的条目不会残留。
         ///
         /// <para>接受 <c>null</c> 与字段缺失的脏数据（跳过而非抛异常），且<b>不触发任何变更事件</b>——
-        /// 这是 <see cref="ISaveable"/> 一族的契约——指的是**玩法**事件，避免读档时层层级联。
+        /// 这是 <see cref="ISaveableRuntime"/> 一族的契约——指的是**玩法**事件，避免读档时层层级联。
         /// <b>1.6.1 起，纯视图刷新是个例外</b>：本方法会在写入设置后自动调一次
         /// <c>Playback.NotifyStateChanged()</c>，按钮图标不必再由调用方手动刷新。
         /// 该事件只被按钮用来换图，不会回流进任何玩法逻辑。</para>

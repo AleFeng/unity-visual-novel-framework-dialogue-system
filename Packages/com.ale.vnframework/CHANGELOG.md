@@ -9,6 +9,18 @@
 > `PixelCrushers.DialogueSystem.VnStoryFramework` → `Ale.VnFramework`。脚本 `.meta` 的 GUID 全部保留，
 > 既有场景与预制体的组件引用不受影响。**升级前请先读下方「⚠ 前置条件」。**
 
+## [1.7.0] - 2026-11-18
+
+**跟进 `com.ale.toolkit` 2.0.0 的存档接口改名。** 行为没有变化。
+
+### 破坏性变更
+
+- ⚠️ **最低 `com.ale.toolkit` 版本提至 2.0.0**：`VnStoryManager` 改为实现非泛型的 `ISaveableRuntime`。宿主若按 `ISaveable` 引用它，改用 `ISaveableRuntime`；宿主框架自己的 `ISaveable`（如 Fs 存档系统的）不受影响。
+
+### 变更
+
+- README 的存档契约一节同步改名。
+
 ## [1.6.6] - 2026-08-27
 
 一场演出的开场与收场各遮一层黑幕。**不配黑幕就完全不生效**，既有工程升级后表现不变。
