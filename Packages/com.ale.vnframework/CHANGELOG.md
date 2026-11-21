@@ -9,6 +9,16 @@
 > `PixelCrushers.DialogueSystem.VnStoryFramework` → `Ale.VnFramework`。脚本 `.meta` 的 GUID 全部保留，
 > 既有场景与预制体的组件引用不受影响。**升级前请先读下方「⚠ 前置条件」。**
 
+## [1.8.0] - 2026-11-21
+
+**条件桥可以按键名前缀排除判定器。** 不配置就完全不生效，既有工程升级后表现不变。
+
+### 新增
+
+- **`VnConditionBridgeSettings`**（`Create ▸ Ale Toolkit ▸ VN Framework ▸ Condition Bridge Settings`）：放在任一 `Resources/` 下、资产名 `VnConditionBridgeSettings`，`excludedKeyPrefixes` 里列出的键前缀（区分大小写）对应的判定器**既不注册成 Lua 函数，也不进条件向导的登记资产**。用于只在某个系统内部有意义、对话里恒判不成立的判定器（如求值主体是「正在派遣的任务」的）。
+- 运行时桥与登记资产生成器共用同一规则；排除是有意为之，运行时不告警，生成报告里列出被排除的键。
+- 设置资产被导入、删除或移走时自动同步一次登记资产（排除名单改了不会触发脚本重编译，不补这一步向导里会留着运行期已不注册的函数）。
+
 ## [1.7.0] - 2026-11-18
 
 **跟进 `com.ale.toolkit` 2.0.0 的存档接口改名。** 行为没有变化。

@@ -354,6 +354,15 @@ Lua 函数名 = `AleCond_` + 判定器 Key（非 `[A-Za-z0-9_]` 的字符换成 
 > 已存的条件就会静默失效；而菜单的叶子段同时就是真实的 Lua 标识符（Dialogue System 生成调用时
 > 只取最后一段），中文标识符不值得赌。
 
+### 不桥接的判定器
+
+有些判定器只在某个系统内部有意义 —— 比如求值主体是「正在派遣的任务」的，对话里没有那个主体，接进来只会恒判不成立，还占着向导的下拉。
+在工程任一 `Resources/` 下建一份 `VnConditionBridgeSettings`（`Create ▸ Ale Toolkit ▸ VN Framework ▸ Condition Bridge Settings`，资产名不要改），
+在 `excludedKeyPrefixes` 里填键前缀（区分大小写），如 `Dispatch.` 排除全部 `Dispatch.*`。命中的判定器不注册成 Lua 函数，也不进登记资产；
+改了名单会自动同步登记资产。没有这份资产时全部判定器照旧桥接。
+
+> 已经写进对话库的条件若用到了被排除的判定器，运行期会找不到函数 —— 排除前先确认对话库里没用过。
+
 ### 参数映射
 
 Dialogue System 的参数类型只有 Bool / Double / String / 数据库实体，**没有通用枚举下拉**，故折中如下：
@@ -577,6 +586,7 @@ com.ale.vnframework/
 │       ├── Ale.VnFramework.Condition.asmdef
 │       │                        versionDefines 从 com.ale.toolkit≥1.4.0 推出 VNS_HAS_CONDITION
 │       ├── VnConditionBridge.cs 把判定器注册成 DS 的 Lua 条件函数
+│       ├── VnConditionBridgeSettings.cs 不桥接的判定器（按键名前缀，放 Resources）
 │       │                        ⚠ 必须晚于 SubsystemRegistration：DS 在那个时机会清空
 │       │                        整个 Lua 环境（含已注册函数），故用 BeforeSceneLoad
 │       ├── VnConditionSources.cs ← 宿主在这里接线数值 / 标记 / 领域服务

@@ -169,11 +169,19 @@ namespace Ale.VnFramework.Editor.ConditionSupport
             notes = new List<string>();
             var records = new List<CustomLuaFunctionInfoRecord>();
             var claimed = new Dictionary<string, string>();
+            var settings = VnConditionBridgeSettings.Load();
 
             // ConditionEvaluatorCatalog.All 已按 Category、Key 排序 —— 顺序稳定是「重复生成结果
             // 逐字节一致」的前提，也是自动同步不制造版本控制噪音的前提。
             foreach (var evaluator in ConditionEvaluatorCatalog.All)
             {
+                // 与运行时桥同一规则：项目设置里排除的不登记，否则向导能选、运行期却找不到函数
+                if (evaluator != null && VnConditionBridgeSettings.IsExcluded(evaluator.Key, settings))
+                {
+                    notes.Add($"「{evaluator.Key}」按 {VnConditionBridgeSettings.ResourceName} 的排除前缀不登记");
+                    continue;
+                }
+
                 string luaName;
                 int parameterCount;
                 string skipReason;
@@ -291,6 +299,24 @@ namespace Ale.VnFramework.Editor.ConditionSupport
 
             EnsureFolder(parent);
             AssetDatabase.CreateFolder(parent, leaf);
+        }
+
+        /// <summary>
+        /// 排除名单改了不会触发脚本重编译，<see cref="AutoSync"/> 等不到 —— 不补这一步，向导里就会留着运行期已不注册的函数。
+        /// 设置资产被导入、删除或移走时同步一次登记资产。
+        /// </summary>
+        private sealed class SettingsWatcher : AssetPostprocessor
+        {
+            private static void OnPostprocessAllAssets(string[] imported, string[] deleted, string[] moved, string[] movedFrom)
+            {
+                if (!Touches(imported) && !Touches(deleted) && !Touches(movedFrom)) return;
+                // 同步执行，理由同 AutoSync：delayCall 在编辑器失焦时可能迟迟不推进（实测改设置后不触发）。
+                // 写的是登记资产而不是设置资产，不会再引回本回调。
+                AutoSync();
+            }
+
+            private static bool Touches(string[] paths)
+                => Array.Exists(paths, p => string.Equals(Path.GetFileNameWithoutExtension(p), VnConditionBridgeSettings.ResourceName, StringComparison.Ordinal));
         }
     }
 }

@@ -62,9 +62,13 @@ namespace Ale.VnFramework.Conditions
 
             // Lua 函数名 → 判定器键，用于撞名自检。全键命名下正常不会撞，撞了必须说出来而不是静默丢弃。
             var claimed = new Dictionary<string, string>();
+            var settings = VnConditionBridgeSettings.Load();
 
             foreach (var evaluator in registry.All)
             {
+                // 项目设置里排除的：有意不接，不告警（与编辑器生成器同一规则，见 VnConditionBridgeSettings）
+                if (evaluator != null && VnConditionBridgeSettings.IsExcluded(evaluator.Key, settings)) continue;
+
                 string luaName;
                 int parameterCount;
                 string skipReason;
