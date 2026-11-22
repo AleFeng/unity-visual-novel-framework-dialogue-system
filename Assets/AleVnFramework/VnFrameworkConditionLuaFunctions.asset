@@ -52,6 +52,12 @@ MonoBehaviour:
   - functionName: "Ale \u6761\u4EF6/Fs \u65F6\u95F4/AleCond_Fs_Time_Year"
     parameters: 020000000200000001000000
     returnValue: 1
+  - functionName: "Ale \u6761\u4EF6/Quest/AleCond_Quest_IsState"
+    parameters: 0200000002000000
+    returnValue: 1
+  - functionName: "Ale \u6761\u4EF6/Quest/AleCond_Quest_ObjectiveDone"
+    parameters: 0200000002000000
+    returnValue: 1
   - functionName: "Ale \u6761\u4EF6/Vn/AleCond_Vn_StoryChoiceIs"
     parameters: 020000000200000001000000
     returnValue: 1

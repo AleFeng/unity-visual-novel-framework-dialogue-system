@@ -1693,6 +1693,8 @@ namespace Ale.VnFramework
         private FActorPrefabLoadData _dialogueHeadPrefabLoadData;
         // 延迟显示的补间句柄。卸载时必须 Kill——否则实例已经销毁，回调还会去初始化一个空引用。
         private ToolkitTweenHandle _dialogueHeadPrefabDelayTween;
+        // 头像最近一次加载 / 卸载请求的序号。加载回来时序号已变即视为过期，丢弃结果（原因同 _actorSlotRequestSerial）。
+        private int _dialogueHeadPrefabRequestSerial;
 
         /// <summary>
         /// 对话行 头像预制体变化。
@@ -1819,6 +1821,8 @@ namespace Ale.VnFramework
 
             LogVerbose($"剧情演出 >> 加载头像预制体 '{headAssetPrefab}'。");
 
+            var requestSerial = ++_dialogueHeadPrefabRequestSerial;
+
             LoadAsset<GameObject>(headAssetPrefabAddress, (headPrefab) =>
             {
                 if (!headPrefab)
@@ -1826,6 +1830,14 @@ namespace Ale.VnFramework
                     // 加载失败这里**不能**调 UnloadAsset：LoadAsset 在失败路径上既没入缓存也没加计数
                     // （见其回调里的 `if (!succeeded)` 分支），补一次卸载会把别人的计数扣掉。
                     Debug.LogWarning($"剧情演出 >> 头像预制体 '{headAssetPrefab}' 加载失败。请检查名称是否正确。");
+                    return;
+                }
+
+                // 过期的请求：加载期间头像已被卸载、换了人，或对话已结束
+                if (requestSerial != _dialogueHeadPrefabRequestSerial)
+                {
+                    LogVerbose($"剧情演出 >> 头像预制体 '{headAssetPrefab}' 加载完成时头像已变更，放弃本次显示。");
+                    UnloadAsset(headAssetPrefabAddress);
                     return;
                 }
 
@@ -1947,6 +1959,8 @@ namespace Ale.VnFramework
         {
             // 先掐掉在途的延迟显示：实例马上要销毁了，回调再去 Init 就是操作空引用。
             _dialogueHeadPrefabDelayTween.Kill();
+            // 作废在途的加载：还没加载回来时下面的记录是空的，会直接返回
+            _dialogueHeadPrefabRequestSerial++;
 
             var loadData = _dialogueHeadPrefabLoadData;
             if (string.IsNullOrEmpty(loadData.AssetAddress)) return;
@@ -2395,7 +2409,23 @@ namespace Ale.VnFramework
         private readonly Dictionary<string, FActorPrefabLoadData> _mapActorAnimator = new Dictionary<string, FActorPrefabLoadData>();
         // 延迟激活的Actor的 延时句柄列表
         private readonly List<ToolkitTweenHandle> _actorInitDelayTweens = new List<ToolkitTweenHandle>();
-        
+        // 各槽位最近一次加载 / 卸载请求的序号。key=字段标题。
+        // 加载是异步的，在途期间映射表里还没有该槽位：此时发出的卸载、换预制体或对话结束都扫不到它，
+        // 加载回来后实例照样挂进槽位，成了没人管的孤儿（同一帧连推多句时必现）。
+        // 故每次请求都递增序号，加载回来时序号已变即视为过期，丢弃结果。
+        private readonly Dictionary<string, int> _actorSlotRequestSerial = new Dictionary<string, int>();
+
+        /// <summary>
+        /// 作废该槽位所有在途的加载请求，返回新的请求序号。
+        /// </summary>
+        /// <param name="actorFieldTitleName">角色 字段标题</param>
+        private int BumpActorSlotRequest(string actorFieldTitleName)
+        {
+            var serial = _actorSlotRequestSerial.GetValueOrDefault(actorFieldTitleName, 0) + 1;
+            _actorSlotRequestSerial[actorFieldTitleName] = serial;
+            return serial;
+        }
+
         /// <summary>
         /// 对话行 角色变化
         /// </summary>
@@ -2468,6 +2498,12 @@ namespace Ale.VnFramework
             // 停止所有延迟激活的Actor的延时
             StopAllActorDelayTweens();
 
+            // 作废所有槽位在途的加载：它们还不在映射表里，下面的卸载循环扫不到
+            foreach (var slot in new List<string>(_actorSlotRequestSerial.Keys))
+            {
+                BumpActorSlotRequest(slot);
+            }
+
             // 卸载 所有角色预制体。
             // 先快照键：UnloadActorPrefab 会从 _mapActorAnimator 里移除条目，不能直接对字典遍历。
             var actorFieldTitleList = new List<string>(_mapActorAnimator.Keys);
@@ -2537,7 +2573,10 @@ namespace Ale.VnFramework
 
             // 日志输出
             LogVerbose($"剧情演出 >> 加载Actor预制体 '{actorAssetPrefab}'。");
-            
+
+            // 本次请求的序号。顺带作废该槽位之前在途的请求（例如上一行的同一预制体还没加载回来）
+            var requestSerial = BumpActorSlotRequest(actorFieldTitleName);
+
             // 加载角色预制体
             Action<GameObject> onAssetLoaded = (asset) =>
             {
@@ -2548,7 +2587,16 @@ namespace Ale.VnFramework
                     Debug.LogWarning($"剧情演出 >> Actor预制体 '{actorAssetPrefab}' 加载失败。请检查名称是否正确。");
                     return;
                 }
-                
+
+                // 过期的请求：加载期间该槽位已被卸载、换了别的预制体，或对话已结束。
+                // 不实例化；LoadAsset 已为这次请求加过引用计数，这里放掉
+                if (_actorSlotRequestSerial.GetValueOrDefault(actorFieldTitleName, 0) != requestSerial)
+                {
+                    LogVerbose($"剧情演出 >> Actor预制体 '{actorAssetPrefab}' 加载完成时槽位已变更，放弃本次显示。");
+                    UnloadAsset(actorAssetPrefabAddress);
+                    return;
+                }
+
                 // 实例化角色预制体
                 var actorPrefabInstance = Instantiate(actorPrefab, this.transform);
                 actorPrefabInstance.SetActive(false); // 设置非激活。等待 InitActorPrefab 激活（延时加载期间也靠它把实例藏住）
@@ -2603,6 +2651,9 @@ namespace Ale.VnFramework
         /// <param name="actorFieldTitleName">角色 字段标题</param>
         private void UnloadActorPrefab(string actorFieldTitleName)
         {
+            // 先作废该槽位在途的加载：还没加载回来时映射表里没有条目，下面会直接返回
+            BumpActorSlotRequest(actorFieldTitleName);
+
             if (!_mapActorAnimator.TryGetValue(actorFieldTitleName, out var actorPrefabLoadData)) return;
 
             // 先从映射表移除：下面的销毁可能带延时，期间不应再被淡入淡出等全表遍历扫到
