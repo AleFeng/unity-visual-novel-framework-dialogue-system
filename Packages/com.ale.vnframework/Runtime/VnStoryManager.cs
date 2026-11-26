@@ -306,6 +306,10 @@ namespace Ale.VnFramework
         private Action _onStoryFinished;
         // 上面那段对话播放完成后，是否自动 StopVnStory
         private bool _autoStopOnFinished = true;
+        // 对话结束后还没清掉的演出资源（头像、背景、角色与特效、音频）。对话一结束就清的话，
+        // 最后一句在收场淡出之前就变了样：头像消失、角色与背景先退场、特效撤掉。
+        // 所以留在场上，等收场淡出走完（StopVnStory）或下一段开播（OnConversationStart）时再清。
+        private bool _isStageClearPending;
         
         /// <summary>
         /// 开始 Vn故事系统
@@ -320,8 +324,8 @@ namespace Ale.VnFramework
         /// 但更重的重入操作建议自行延后一帧。</para></param>
         /// <param name="autoStopOnFinished">对话播放完成后是否自动调用 <see cref="StopVnStory"/>，默认 <c>true</c>。
         /// <para>传 <c>false</c> 用于「一段接一段连播」：UI 与背景留在场上，由调用方自行决定何时收场。</para>
-        /// <para>注意此刻 <c>OnConversationEnd</c> 的清理已经执行完毕（角色 / 背景 / 音频均已硬清除），
-        /// 因此这次 StopVnStory 实际只淡出 UI 并复位 <c>_isVnStoryStarted</c>，
+        /// <para>1.8.2 起对话结束时不当场清场：最后一句的头像、角色、背景与音频留在场上，
+        /// 这次 StopVnStory 把它们与 UI 一起淡出，淡完再清，并复位 <c>_isVnStoryStarted</c>，
         /// 好让下一次 StartVnStory 能重新走一遍淡入。</para></param>
         /// <param name="skipStartEntryConditions">是否<b>跳过入口节点的条件判定</b>，默认 <c>false</c>。
         /// <para>Dialogue System 的条件挂在<b>节点</b>上、在<b>遍历出边时</b>求值。会话的 START 指向首个真实
@@ -386,6 +390,7 @@ namespace Ale.VnFramework
         {
             if (!_isVnStoryStarted)
             {
+                ClearStageIfPending();
                 onComplete?.Invoke();
                 return;
             }
@@ -399,6 +404,9 @@ namespace Ale.VnFramework
                     // 停止 当前的对话演出。
                     StopStoryConversation();
                 }
+
+                // UI 已经淡完，对话结束时留在场上的演出资源到此才清（上一行停对话发出的 OnConversationEnd 也只是登记清场）
+                ClearStageIfPending();
 
                 // 围栏撑到这里才撤：本方法只是**开始**收场，对话要等淡出结束才真正停。
                 // 若在方法开头就撤，这半秒里玩家再点几下，后续那些行就成了「没围栏」的
@@ -515,6 +523,10 @@ namespace Ale.VnFramework
         [Preserve]
         public virtual void OnConversationStart(Transform actor)
         {
+            // 上一段结束时留在场上的演出资源，赶在新一段的首行之前清掉：首行在本消息之后才处理，
+            // 新一段的角色 / 背景不会被误清。
+            ClearStageIfPending();
+
             // TODO: 暂停当前BGM
 
             // 把本段对话的已读状态推进 Lua。**必须在这里，不能更晚**：
@@ -530,12 +542,31 @@ namespace Ale.VnFramework
         /// <summary>
         /// 当 对话 结束。由 Dialogue System 经 <c>BroadcastMessage</c> 调用。
         /// <para>覆写点：可在此恢复宿主的场景 BGM。<b>请调用 base</b>——
-        /// 下面这几个 Clear 负责回收全部演出资源，跳过会造成句柄泄漏。</para>
+        /// base 登记清场，全部演出资源靠它在收场淡出走完或下一段开播时回收，跳过会造成句柄泄漏。</para>
+        /// <para>1.8.2 起不当场清场：最后一句的头像、角色、背景、特效与音频留到收场淡出走完
+        /// （<see cref="StopVnStory"/>）或下一段开播（<see cref="OnConversationStart"/>）时再清。</para>
         /// </summary>
         /// <param name="actor"></param>
         [Preserve]
         public virtual void OnConversationEnd(Transform actor)
         {
+            _isStageClearPending = true;
+
+            // TODO: 恢复之前的BGM
+
+            // 播放完成收尾：触发 StartVnStory 登记的回调，并按需自动收场。
+            // 回调里若接着播下一段，清场在新一段的 OnConversationStart 里先做完，新一段的角色 / 背景不受影响。
+            HandleStoryConversationFinished();
+        }
+
+        /// <summary>
+        /// 清掉对话结束时留在场上的演出资源（见 <see cref="_isStageClearPending"/>）。没有待清的就什么都不做。
+        /// </summary>
+        private void ClearStageIfPending()
+        {
+            if (!_isStageClearPending) return;
+            _isStageClearPending = false;
+
             // 清除所有 对话 头像图像
             ClearAllDialogueHeadImage();
             // 清除 对话 头像预制体
@@ -548,13 +579,6 @@ namespace Ale.VnFramework
             ClearAllBGM();
             // 清除所有 音效
             ClearAllSfx();
-
-            // TODO: 恢复之前的BGM
-
-            // 播放完成收尾：触发 StartVnStory 登记的回调，并按需自动收场。
-            // ⚠️ 必须排在上面这些 Clear 之后：回调里若接着播下一段，
-            // 新一段刚加载出来的角色 / 背景会被这些 Clear 当场清掉。
-            HandleStoryConversationFinished();
         }
 
         /// <summary>
